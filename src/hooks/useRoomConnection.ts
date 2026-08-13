@@ -19,10 +19,25 @@ export function useRoomConnection(roomCode: string, nickname: string, clientId: 
         const socket = getSocket();
         const st = useRoomStore.getState();
 
+        let joinTimeout: ReturnType<typeof setTimeout> | null = null;
+
         const join = () => {
+            if (joinTimeout) clearTimeout(joinTimeout);
+            
+            // Timeout safety: if join ack doesn't arrive in 5s, display error
+            joinTimeout = setTimeout(() => {
+                if (!useRoomStore.getState().joined && !useRoomStore.getState().joinError) {
+                    useRoomStore.getState().setJoinError('Room connection timeout. Click to retry.');
+                }
+            }, 6000);
+
             socket.emit('room:join', { roomCode, nickname, clientId }, (res) => {
-                if (res.ok) useRoomStore.getState().applySnapshot(res.snapshot);
-                else useRoomStore.getState().setJoinError(res.error);
+                if (joinTimeout) clearTimeout(joinTimeout);
+                if (res.ok) {
+                    useRoomStore.getState().applySnapshot(res.snapshot);
+                } else {
+                    useRoomStore.getState().setJoinError(res.error || 'Could not join room');
+                }
             });
         };
 

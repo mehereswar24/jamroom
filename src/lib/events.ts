@@ -2,7 +2,8 @@
 
 import type {
     ChatMessage, ImportCompletePayload, ImportProgressPayload, Member,
-    PlaybackState, QueueItem, RoomSnapshot, VideoCandidate, VoteSkipState
+    PlaybackState, QueueItem, RoomSnapshot, RtcPeer, RtcSignalData,
+    VideoCandidate, VoteSkipState
 } from './types';
 
 export type Ack<T = object> = (res: ({ ok: true } & T) | { ok: false; error: string }) => void;
@@ -46,6 +47,12 @@ export interface ClientToServerEvents {
     'chat:send': (p: { body: string }, ack: Ack) => void;
     'chat:typing': (p: { isTyping: boolean }) => void;
     'chat:react': (p: { emoji: string }) => void;
+
+    /* WebRTC voice/video/screen (mesh; server only relays signaling) */
+    'rtc:join': (ack: Ack<{ peers: RtcPeer[] }>) => void;
+    'rtc:leave': () => void;
+    'rtc:setState': (p: { audio: boolean; video: boolean; screen: boolean }) => void;
+    'rtc:signal': (p: { to: string; data: RtcSignalData }) => void;
 }
 
 export interface ServerToClientEvents {

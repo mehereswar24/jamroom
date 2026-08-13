@@ -78,6 +78,21 @@ export interface RoomSnapshot {
     serverTime: number;
 }
 
+/* WebRTC call presence + signaling (structural shapes so this stays DOM-free
+ * on the server; the client casts to RTCSessionDescriptionInit / RTCIceCandidateInit). */
+export interface RtcPeer {
+    clientId: string;
+    nickname: string;
+    audio: boolean;
+    video: boolean;
+    screen: boolean;
+}
+
+export interface RtcSignalData {
+    description?: { type: string; sdp?: string };
+    candidate?: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null; usernameFragment?: string | null } | null;
+}
+
 export interface ImportProgressPayload {
     importId: string;
     done: number;

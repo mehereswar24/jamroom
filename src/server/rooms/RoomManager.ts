@@ -34,6 +34,8 @@ export class RoomState {
     /** socketId → member. One clientId may have several sockets (tabs); dedupe for display. */
     sockets = new Map<string, ConnectedMember>();
     voteSkip = new Set<string>();
+    /** clientId → media flags for everyone currently in the WebRTC call. */
+    rtcPeers = new Map<string, { audio: boolean; video: boolean; screen: boolean }>();
     private endTimer: ReturnType<typeof setTimeout> | null = null;
     private hostGraceTimer: ReturnType<typeof setTimeout> | null = null;
     private evictTimer: ReturnType<typeof setTimeout> | null = null;

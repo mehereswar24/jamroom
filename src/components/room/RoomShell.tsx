@@ -82,11 +82,36 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
     if (joinError) {
         return (
             <CenterNote text={joinError}>
-                <Link href="/" className="mt-2 text-accent hover:underline text-sm font-medium">← Back to home</Link>
+                <div className="flex items-center gap-3 mt-3">
+                    <button
+                        onClick={() => {
+                            useRoomStore.getState().setJoinError(null);
+                            getSocket().connect();
+                        }}
+                        className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl shadow hover:bg-slate-200 cursor-pointer"
+                    >
+                        Retry Connection
+                    </button>
+                    <Link href="/" className="text-white/60 hover:text-white text-xs font-semibold underline">← Back to home</Link>
+                </div>
             </CenterNote>
         );
     }
-    if (!joined) return <CenterNote text="Connecting to synced audio room…" />;
+    if (!joined) {
+        return (
+            <CenterNote text="Connecting to synced audio room…">
+                <button
+                    onClick={() => {
+                        getSocket().disconnect();
+                        getSocket().connect();
+                    }}
+                    className="mt-3 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs rounded-xl cursor-pointer"
+                >
+                    Stuck? Re-connect Socket
+                </button>
+            </CenterNote>
+        );
+    }
 
     return (
         <main className="flex-1 flex flex-col max-w-[1440px] w-full mx-auto px-2.5 sm:px-4 lg:px-6 py-2.5 sm:py-4 gap-3 sm:gap-4 min-h-0 lg:h-[calc(100vh-24px)] lg:max-h-[calc(100vh-24px)] overflow-y-auto lg:overflow-hidden">
