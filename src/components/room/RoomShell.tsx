@@ -176,10 +176,8 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
                         </div>
                     </div>
 
-                    {/* Join / leave voice+video call */}
-                    {!call.inCall && (
-                        <CallBar call={call} selfNickname={nickname} selfClientId={selfClientId} />
-                    )}
+                    {/* Voice & Video Call Bar */}
+                    <CallBar call={call} selfNickname={nickname} selfClientId={selfClientId} />
 
                     {/* Host Controls Menu Button */}
                     {isHost && (

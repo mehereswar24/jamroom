@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-    Mic, MicOff, Video, VideoOff, MonitorUp, MonitorX, PhoneOff, Phone
+    Mic, MicOff, Video, VideoOff, MonitorUp, MonitorX, PhoneOff, Phone, GripHorizontal, Minimize2, Maximize2, PinOff, ExternalLink
 } from 'lucide-react';
 import type { MediaChat, RemotePeer } from '@/hooks/useMediaChat';
 import { avatarColorFor } from '@/lib/ids';
@@ -10,6 +10,34 @@ import { avatarColorFor } from '@/lib/ids';
 export default function CallBar({ call, selfNickname, selfClientId }: {
     call: MediaChat; selfNickname: string; selfClientId: string;
 }) {
+    const [isFloating, setIsFloating] = useState(true);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [pos, setPos] = useState({ x: 20, y: 100 });
+    const isDraggingRef = useRef(false);
+    const dragOffsetRef = useRef({ x: 0, y: 0 });
+
+    const onPointerDown = (e: React.PointerEvent) => {
+        if (!isFloating) return;
+        isDraggingRef.current = true;
+        dragOffsetRef.current = {
+            x: e.clientX - pos.x,
+            y: e.clientY - pos.y
+        };
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e: React.PointerEvent) => {
+        if (!isDraggingRef.current) return;
+        const newX = Math.max(10, Math.min(window.innerWidth - 240, e.clientX - dragOffsetRef.current.x));
+        const newY = Math.max(10, Math.min(window.innerHeight - 150, e.clientY - dragOffsetRef.current.y));
+        setPos({ x: newX, y: newY });
+    };
+
+    const onPointerUp = (e: React.PointerEvent) => {
+        isDraggingRef.current = false;
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    };
+
     if (!call.inCall) {
         return (
             <button
@@ -27,33 +55,126 @@ export default function CallBar({ call, selfNickname, selfClientId }: {
         ...call.peers.map(p => ({ ...p, self: false })),
     ];
 
-    return (
-        <div className="glass rounded-2xl border-white/10 p-2.5 sm:p-3 flex flex-col gap-2.5 shadow-lg">
-            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
+    const mainBar = (
+        <div className="glass rounded-2xl border-white/15 p-2.5 sm:p-3 flex flex-col gap-2 shadow-2xl bg-black/90 backdrop-blur-2xl">
+            {/* Header Drag Handle & Controls */}
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 px-0.5">
+                <div
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    className={`flex items-center gap-2 text-[11px] font-mono font-bold tracking-wider text-white/50 ${
+                        isFloating ? 'cursor-grab active:cursor-grabbing hover:text-white select-none' : ''
+                    }`}
+                >
+                    {isFloating && <GripHorizontal size={16} className="text-white/70" />}
+                    <span>VOICE & VIDEO CALL ({tiles.length})</span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                    {isFloating ? (
+                        <>
+                            <button
+                                onClick={() => setIsMinimized(!isMinimized)}
+                                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all cursor-pointer"
+                                title={isMinimized ? 'Expand Call Window' : 'Minimize Call Window'}
+                            >
+                                {isMinimized ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
+                            </button>
+                            <button
+                                onClick={() => { setIsFloating(false); setIsMinimized(false); }}
+                                className="px-2 py-0.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Dock into room header"
+                            >
+                                <PinOff size={12} />
+                                <span>Dock</span>
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => { setIsFloating(true); setIsMinimized(false); }}
+                            className="px-2 py-0.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                            title="Float into Picture-in-Picture window"
+                        >
+                            <ExternalLink size={12} />
+                            <span>Float PiP</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[90vw]">
                 {tiles.map(t => (
                     <VideoTile key={t.clientId} peer={t} self={t.self} />
                 ))}
             </div>
 
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex items-center justify-center gap-2 pt-1 border-t border-white/10">
                 <CtrlButton on={call.micOn} onClick={call.toggleMic}
-                    onIcon={<Mic size={17} />} offIcon={<MicOff size={17} />} label="Mic" />
+                    onIcon={<Mic size={15} />} offIcon={<MicOff size={15} />} label="Mic" />
                 <CtrlButton on={call.camOn} onClick={call.toggleCam}
-                    onIcon={<Video size={17} />} offIcon={<VideoOff size={17} />} label="Camera" />
+                    onIcon={<Video size={15} />} offIcon={<VideoOff size={15} />} label="Camera" />
                 <CtrlButton on={call.screenOn} onClick={call.toggleScreen}
-                    onIcon={<MonitorUp size={17} />} offIcon={<MonitorX size={17} />} label="Share" accent />
+                    onIcon={<MonitorUp size={15} />} offIcon={<MonitorX size={15} />} label="Share" accent />
                 <button
                     onClick={call.leaveCall}
-                    className="flex items-center gap-1.5 bg-red-500/90 hover:bg-red-500 text-white rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer"
-                    title="Leave the call"
+                    className="flex items-center gap-1 bg-red-500/90 hover:bg-red-500 text-white rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Leave call"
                 >
-                    <PhoneOff size={16} /> <span className="hidden sm:inline">Leave</span>
+                    <PhoneOff size={14} /> <span>Leave</span>
                 </button>
             </div>
 
             {call.error && <p className="text-[11px] text-red-300 text-center">{call.error}</p>}
         </div>
     );
+
+    if (isFloating) {
+        if (isMinimized) {
+            return (
+                <div
+                    style={{ left: pos.x, top: pos.y }}
+                    className="fixed z-[100] bg-black/90 backdrop-blur-xl border border-white/20 rounded-2xl p-2 shadow-2xl flex items-center gap-2 select-none"
+                >
+                    <div
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        className="cursor-grab active:cursor-grabbing text-white/40 hover:text-white p-1"
+                        title="Drag Call Bar"
+                    >
+                        <GripHorizontal size={16} />
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>IN CALL ({tiles.length})</span>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2">
+                        <CtrlButton on={call.micOn} onClick={call.toggleMic}
+                            onIcon={<Mic size={13} />} offIcon={<MicOff size={13} />} label="Mic" />
+                        <button
+                            onClick={() => setIsMinimized(false)}
+                            className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 cursor-pointer"
+                            title="Expand Call Window"
+                        >
+                            <Maximize2 size={13} />
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div
+                style={{ left: pos.x, top: pos.y }}
+                className="fixed z-[100] max-w-[95vw] shadow-[0_25px_60px_rgba(0,0,0,0.9)]"
+            >
+                {mainBar}
+            </div>
+        );
+    }
+
+    return mainBar;
 }
 
 function CtrlButton({ on, onClick, onIcon, offIcon, label, accent }: {
