@@ -119,8 +119,8 @@ export default function PlayerPane() {
             </div>
 
             {/* Now Playing Bar + Controls */}
-            <div className="glass rounded-3xl p-4 sm:p-5 border-white/10">
-                <div className="flex items-center gap-4">
+            <div className="glass rounded-3xl p-3.5 sm:p-5 border-white/10">
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:flex-nowrap">
                     {/* Album Art with Vinyl Spin Effect */}
                     <div className="relative shrink-0">
                         {current?.albumArtUrl ? (
@@ -129,40 +129,40 @@ export default function PlayerPane() {
                                 <img
                                     src={current.albumArtUrl}
                                     alt=""
-                                    className={`w-14 h-14 rounded-2xl object-cover border border-white/15 shadow-md ${playback.isPlaying ? 'animate-spin-vinyl' : ''}`}
+                                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-white/15 shadow-md ${playback.isPlaying ? 'animate-spin-vinyl' : ''}`}
                                 />
                                 <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none" />
                             </div>
                         ) : (
-                            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
                                 <Disc3 size={22} className="text-white/30" />
                             </div>
                         )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-[140px]">
                         <div className="flex items-center gap-2">
-                            <p className="font-semibold text-base truncate text-white">{current?.title ?? 'Nothing playing'}</p>
+                            <p className="font-semibold text-sm sm:text-base truncate text-white">{current?.title ?? 'Nothing playing'}</p>
                             {/* Audio Equalizer animation when playing */}
                             {playback.isPlaying && current && (
-                                <div className="flex items-end gap-0.5 h-4 shrink-0 px-1.5 py-0.5 rounded bg-accent/20 border border-accent/30">
-                                    <span className="w-1 bg-accent rounded-full eq-bar-1" />
-                                    <span className="w-1 bg-accent rounded-full eq-bar-2" />
-                                    <span className="w-1 bg-accent rounded-full eq-bar-3" />
-                                    <span className="w-1 bg-accent rounded-full eq-bar-4" />
+                                <div className="flex items-end gap-0.5 h-4 shrink-0 px-1.5 py-0.5 rounded bg-white/10 border border-white/20">
+                                    <span className="w-1 bg-white rounded-full eq-bar-1" />
+                                    <span className="w-1 bg-white rounded-full eq-bar-2" />
+                                    <span className="w-1 bg-white rounded-full eq-bar-3" />
+                                    <span className="w-1 bg-white rounded-full eq-bar-4" />
                                 </div>
                             )}
                         </div>
-                        <p className="text-xs sm:text-sm text-white/50 truncate mt-0.5">{current?.artist ?? 'Add something to the queue to get started'}</p>
+                        <p className="text-xs text-white/50 truncate mt-0.5">{current?.artist ?? 'Add something to the queue to get started'}</p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
                         {/* Vote Skip Button */}
                         {current && (
                             <button
                                 onClick={() => getSocket().emit('queue:voteSkip', () => {})}
                                 title={votedSkip ? 'Withdraw skip vote' : 'Vote to skip'}
-                                className={`flex items-center gap-1.5 text-xs font-medium rounded-2xl px-3.5 py-2.5 border transition-all cursor-pointer ${
+                                className={`flex items-center gap-1 text-xs font-medium rounded-xl sm:rounded-2xl px-2.5 sm:px-3.5 py-2 sm:py-2.5 border transition-all cursor-pointer ${
                                     votedSkip
                                         ? 'bg-amber-500/20 border-amber-400/40 text-amber-300'
                                         : 'border-white/10 bg-white/5 hover:bg-white/10 text-white/60'
@@ -178,22 +178,22 @@ export default function PlayerPane() {
                             <>
                                 <button
                                     onClick={() => emitControl(playback.isPlaying ? 'playback:pause' : 'playback:play')}
-                                    className="w-12 h-12 rounded-2xl bg-white hover:bg-slate-200 active:scale-95 flex items-center justify-center shadow-[0_0_25px_rgba(255,255,255,0.4)] transition-all cursor-pointer text-black"
+                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-200 active:scale-95 flex items-center justify-center shadow-[0_0_25px_rgba(255,255,255,0.4)] transition-all cursor-pointer text-black"
                                     title={playback.isPlaying ? 'Pause for room' : 'Play for room'}
                                 >
-                                    {playback.isPlaying ? <Pause size={20} className="fill-black text-black" /> : <Play size={20} className="ml-0.5 fill-black text-black" />}
+                                    {playback.isPlaying ? <Pause size={18} className="fill-black text-black" /> : <Play size={18} className="ml-0.5 fill-black text-black" />}
                                 </button>
                                 <button
                                     onClick={() => emitControl('playback:skip')}
-                                    className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 flex items-center justify-center transition-all cursor-pointer text-white"
+                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 flex items-center justify-center transition-all cursor-pointer text-white"
                                     title="Skip Track"
                                 >
-                                    <SkipForward size={18} />
+                                    <SkipForward size={16} />
                                 </button>
                             </>
                         ) : (
-                            <span className="text-xs text-white/40 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5" title="Ask the host for controls permissions">
-                                🔒 Host Controls
+                            <span className="text-[11px] text-white/40 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/5" title="Ask the host for controls permissions">
+                                🔒 Host Only
                             </span>
                         )}
                     </div>

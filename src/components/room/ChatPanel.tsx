@@ -67,8 +67,9 @@ export default function ChatPanel() {
                         </div>
                         <div className={`max-w-[75%] ${m.clientId === selfClientId ? 'text-right' : ''}`}>
                             <p className="text-[11px] text-white/40 mb-0.5">{m.nickname}</p>
-                            <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm break-words text-left ${m.clientId === selfClientId ? 'bg-accent/80' : 'bg-white/8'}`}
-                                style={m.clientId === selfClientId ? {} : { backgroundColor: 'rgba(255,255,255,0.07)' }}>
+                            <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm break-words text-left ${
+                                m.clientId === selfClientId ? 'bg-white text-black font-semibold shadow' : 'bg-white/10 text-white border border-white/10'
+                            }`}>
                                 {m.body}
                             </div>
                         </div>
@@ -81,7 +82,7 @@ export default function ChatPanel() {
                     {typers.slice(0, 2).join(', ')}{typers.length > 2 ? ` +${typers.length - 2}` : ''} typing…
                 </p>
             )}
-            {error && <p className="px-4 pb-1 text-[11px] text-red-400">{error}</p>}
+            {error && <p className="px-4 pb-1 text-[11px] text-white font-medium">{error}</p>}
 
             <div className="p-3 border-t border-white/10 flex gap-2">
                 <input
@@ -90,9 +91,9 @@ export default function ChatPanel() {
                     onKeyDown={e => e.key === 'Enter' && send()}
                     placeholder="Say something…"
                     maxLength={500}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-accent/60"
+                    className="flex-1 bg-black/60 border border-white/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white"
                 />
-                <button onClick={send} className="bg-accent hover:bg-accent/90 rounded-xl px-4 transition-colors">
+                <button onClick={send} className="bg-white hover:bg-slate-200 text-black rounded-xl px-4 transition-all cursor-pointer font-bold shrink-0">
                     <SendHorizonal size={16} />
                 </button>
             </div>

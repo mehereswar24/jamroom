@@ -89,60 +89,60 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
     if (!joined) return <CenterNote text="Connecting to synced audio room…" />;
 
     return (
-        <main className="flex-1 flex flex-col max-w-[1440px] w-full mx-auto px-4 lg:px-6 py-4 gap-4 min-h-0 lg:h-[calc(100vh-24px)] lg:max-h-[calc(100vh-24px)] overflow-hidden">
+        <main className="flex-1 flex flex-col max-w-[1440px] w-full mx-auto px-2.5 sm:px-4 lg:px-6 py-2.5 sm:py-4 gap-3 sm:gap-4 min-h-0 lg:h-[calc(100vh-24px)] lg:max-h-[calc(100vh-24px)] overflow-y-auto lg:overflow-hidden">
             {/* Room Shell Header Bar */}
-            <header className="relative z-50 glass rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap border-white/10 shadow-lg">
-                <div className="flex items-center gap-3.5 min-w-0">
-                    <Link href="/" className="flex items-center gap-2.5 group">
-                        <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/40 flex items-center justify-center group-hover:border-accent transition-colors">
-                            <Disc3 className="text-accent group-hover:rotate-180 transition-transform duration-700" size={20} />
+            <header className="relative z-50 glass rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 flex-wrap border-white/10 shadow-lg">
+                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-wrap sm:flex-nowrap">
+                    <Link href="/" className="flex items-center gap-2 group shrink-0">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center group-hover:border-white transition-colors">
+                            <Disc3 className="text-white group-hover:rotate-180 transition-transform duration-700" size={18} />
                         </div>
-                        <span className="font-bold tracking-tight text-base sm:text-lg bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+                        <span className="font-bold tracking-tight text-sm sm:text-lg bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
                             JamRoom
                         </span>
                     </Link>
-                    <div className="h-5 w-px bg-white/10 hidden sm:block" />
-                    <div className="flex items-center gap-2 truncate">
-                        <span className="text-sm font-semibold text-white/90 truncate max-w-[180px] sm:max-w-[260px]">
+                    <div className="h-4 w-px bg-white/10 hidden sm:block" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 truncate">
+                        <span className="text-xs sm:text-sm font-semibold text-white/90 truncate max-w-[120px] sm:max-w-[260px]">
                             {roomName}
                         </span>
-                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
+                        <span className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-mono font-bold tracking-wider rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE
                         </span>
                     </div>
 
                     <button
                         onClick={copyInvite}
-                        className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 rounded-xl px-3 py-1.5 font-mono tracking-widest transition-all cursor-pointer text-white/80"
+                        className="flex items-center gap-1 text-[11px] sm:text-xs bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 font-mono tracking-widest transition-all cursor-pointer text-white/80 shrink-0"
                         title="Copy invite link to clipboard"
                     >
-                        {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                        {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                         <span>{roomCode}</span>
-                        {copied && <span className="text-[10px] text-emerald-400 font-sans tracking-normal ml-1">Copied!</span>}
+                        {copied && <span className="text-[9px] text-emerald-400 font-sans tracking-normal ml-0.5">Copied!</span>}
                     </button>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto sm:ml-0">
                     {/* Active Member Avatar Stack */}
-                    <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-2xl px-3 py-1.5">
-                        <Users size={14} className="text-white/40" />
+                    <div className="flex items-center gap-1.5 sm:gap-2 bg-black/40 border border-white/10 rounded-xl sm:rounded-2xl px-2.5 py-1 sm:px-3 sm:py-1.5">
+                        <Users size={13} className="text-white/40" />
                         <div className="flex -space-x-2">
-                            {members.slice(0, 6).map(m => (
+                            {members.slice(0, 4).map(m => (
                                 <div
                                     key={m.clientId}
                                     title={`${m.nickname}${m.clientId === hostClientId ? ' (Host)' : ''}`}
-                                    className="relative w-7 h-7 rounded-full border-2 border-slate-950 flex items-center justify-center text-[10px] font-bold shadow"
+                                    className="relative w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-slate-950 flex items-center justify-center text-[9px] sm:text-[10px] font-bold shadow"
                                     style={{ backgroundColor: m.avatarColor }}
                                 >
                                     {m.nickname.slice(0, 1).toUpperCase()}
                                     {m.clientId === hostClientId && (
-                                        <Crown size={10} className="absolute -top-1.5 -right-1 text-amber-300 drop-shadow" />
+                                        <Crown size={9} className="absolute -top-1.5 -right-1 text-amber-300 drop-shadow" />
                                     )}
                                 </div>
                             ))}
-                            {members.length > 6 && (
-                                <div className="w-7 h-7 rounded-full border-2 border-slate-950 bg-white/10 flex items-center justify-center text-[10px] font-semibold text-white/70">
-                                    +{members.length - 6}
+                            {members.length > 4 && (
+                                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-slate-950 bg-white/10 flex items-center justify-center text-[9px] font-semibold text-white/70">
+                                    +{members.length - 4}
                                 </div>
                             )}
                         </div>
@@ -153,10 +153,11 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
                         <div className="relative">
                             <button
                                 onClick={() => setHostMenuOpen(o => !o)}
-                                className="flex items-center gap-1.5 text-xs font-semibold bg-accent/20 hover:bg-accent/30 border border-accent/40 text-accent-foreground rounded-2xl px-3.5 py-2 transition-all cursor-pointer"
+                                className="flex items-center gap-1 text-xs font-semibold bg-white text-black hover:bg-slate-200 rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 transition-all cursor-pointer shadow-sm"
                             >
-                                <Settings size={14} />
-                                <span>Host Controls</span>
+                                <Settings size={13} />
+                                <span className="hidden sm:inline">Host Controls</span>
+                                <span className="sm:hidden">Host</span>
                             </button>
                             {hostMenuOpen && (
                                 <HostMenu
