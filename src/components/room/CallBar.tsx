@@ -28,21 +28,24 @@ export default function CallBar({ call, selfNickname, selfClientId }: {
     ];
 
     return (
-        <div className="glass rounded-2xl border-white/15 p-2.5 sm:p-3 flex flex-col gap-2 shadow-xl bg-black/80 backdrop-blur-xl">
-            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 px-0.5">
+        <div className="glass rounded-2xl border-white/15 p-3 flex flex-col gap-2.5 shadow-2xl bg-black/85 backdrop-blur-xl resize overflow-auto min-w-[280px] min-h-[160px] max-w-[95vw] relative group">
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 px-0.5 shrink-0">
                 <span className="text-[11px] font-mono font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    LIVE VOICE & VIDEO ({tiles.length})
+                    LIVE CALL ({tiles.length})
+                </span>
+                <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 transition-colors">
+                    ↘ Drag corner to resize
                 </span>
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[90vw]">
+            <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1 flex-1 min-h-0">
                 {tiles.map(t => (
                     <VideoTile key={t.clientId} peer={t} self={t.self} />
                 ))}
             </div>
 
-            <div className="flex items-center justify-center gap-2 pt-1 border-t border-white/10">
+            <div className="flex items-center justify-center gap-2 pt-1.5 border-t border-white/10 shrink-0">
                 <CtrlButton on={call.micOn} onClick={call.toggleMic}
                     onIcon={<Mic size={15} />} offIcon={<MicOff size={15} />} label="Mic" />
                 <CtrlButton on={call.camOn} onClick={call.toggleCam}
@@ -58,7 +61,7 @@ export default function CallBar({ call, selfNickname, selfClientId }: {
                 </button>
             </div>
 
-            {call.error && <p className="text-[11px] text-red-300 text-center">{call.error}</p>}
+            {call.error && <p className="text-[11px] text-red-300 text-center shrink-0">{call.error}</p>}
         </div>
     );
 }
