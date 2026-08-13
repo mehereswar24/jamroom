@@ -5,7 +5,7 @@ import {
     AlertCircle, ArrowDown, ArrowUp, Check, Disc3, GripVertical, ListPlus, Loader2, Music2,
     Play, Search, Shuffle, Trash2, Wrench, X
 } from 'lucide-react';
-import { getSocket } from '@/hooks/socket';
+import { api, driveImport } from '@/hooks/api';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { formatDuration } from '@/lib/ids';
 import type { QueueItem, VideoCandidate } from '@/lib/types';
@@ -33,9 +33,7 @@ export default function QueuePanel() {
 
     const totalDurationMs = upcoming.reduce((acc, item) => acc + (item.durationMs || 0), 0);
 
-    const handleShuffle = () => {
-        getSocket().emit('queue:shuffle', () => {});
-    };
+    const handleShuffle = () => { void api.queue('shuffle'); };
 
     return (
         <div className="h-full flex flex-col min-h-0">
@@ -163,7 +161,7 @@ export default function QueuePanel() {
                             </div>
 
                             {/* Track Title & Artist */}
-                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => canPlay && getSocket().emit('playback:playItem', { queueItemId: item.id }, () => {})}>
+                            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => canPlay && void api.playback('playItem', { queueItemId: item.id })}>
                                 <p className={`text-xs font-semibold truncate ${isCurrent ? 'text-white font-heading font-bold' : 'text-white'}`}>
                                     {item.title}
                                 </p>
@@ -193,7 +191,7 @@ export default function QueuePanel() {
                             <div className="flex items-center gap-1">
                                 {canPlay && (
                                     <button
-                                        onClick={() => getSocket().emit('playback:playItem', { queueItemId: item.id }, () => {})}
+                                        onClick={() => void api.playback('playItem', { queueItemId: item.id })}
                                         title="Play now for room"
                                         className="w-7 h-7 rounded-lg bg-white hover:bg-slate-200 text-black flex items-center justify-center transition-all cursor-pointer shadow-sm"
                                     >
@@ -201,7 +199,17 @@ export default function QueuePanel() {
                                     </button>
                                 )}
                                 {mayRemove && (
-                                    <button title="Remove" onClick={() => getSocket().emit('queue:remove', { queueItemId: item.id }, () => {})} className="p-1.5 text-white/30 hover:text-red-400 transition-colors cursor-pointer">
+                                    <button
+                                        title="Remove from queue"
+                                        onClick={() => {
+                                            // Optimistically remove from local state instantly (0ms delay)
+                                            const st = useRoomStore.getState();
+                                            st.setQueue(st.queue.filter(q => q.id !== item.id));
+                                            // Persist to server and broadcast to all room members
+                                            void api.queue('remove', { queueItemId: item.id });
+                                        }}
+                                        className="p-1.5 text-white/30 hover:text-red-400 active:scale-90 transition-all cursor-pointer"
+                                    >
                                         <Trash2 size={13} />
                                     </button>
                                 )}
@@ -217,10 +225,15 @@ export default function QueuePanel() {
     );
 }
 
-/** Translate an index within the upcoming list to a global queue reorder. */
+/** Move an item to a new position within the upcoming list → full ordered id list. */
 function reorderTo(queueItemId: number, upcomingIndex: number, queue: QueueItem[], currentId: number | null) {
     const played = queue.filter(q => q.playedAt && q.id !== currentId).length;
-    getSocket().emit('queue:reorder', { queueItemId, toIndex: played + upcomingIndex }, () => {});
+    const ids = queue.map(q => q.id);
+    const from = ids.indexOf(queueItemId);
+    if (from === -1) return;
+    const to = Math.max(0, Math.min(ids.length - 1, played + upcomingIndex));
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    void api.queue('reorder', { orderedIds: ids });
 }
 
 function IconBtn({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: () => void }) {
@@ -252,7 +265,7 @@ function AddTracksModal({ close }: { close: () => void }) {
     // (.mp3/.mp4/.webm…) from any host — the server resolves and queues it.
     const addLink = () => {
         setSearching(true); setError(null); setLinkAdded(null);
-        getSocket().emit('queue:addUrl', { url: q.trim() }, (res) => {
+        void api.queue<{ title: string }>('addUrl', { url: q.trim() }).then((res) => {
             setSearching(false);
             if (res.ok) {
                 setLinkAdded(res.title);
@@ -281,7 +294,7 @@ function AddTracksModal({ close }: { close: () => void }) {
     };
 
     const add = (v: VideoCandidate) => {
-        getSocket().emit('queue:add', { video: v }, (res) => {
+        void api.queue('add', { video: v }).then((res) => {
             if (res.ok) setAdded(s => new Set(s).add(v.videoId));
             else setError(res.error);
         });
@@ -291,9 +304,7 @@ function AddTracksModal({ close }: { close: () => void }) {
         const url = playlistUrl.trim();
         if (!url) return;
         setImporting(true); setError(null);
-        // The server fetches the FULL playlist (500+ tracks) via Spotify's
-        // pathfinder API — no user token needed.
-        getSocket().emit('import:start', { playlistUrl: url }, (res) => {
+        void driveImport({ playlistUrl: url }).then((res) => {
             setImporting(false);
             if (res.ok) close();
             else setError(res.error);
@@ -305,16 +316,13 @@ function AddTracksModal({ close }: { close: () => void }) {
         if (!lines.length) return setError('Please paste at least one song name');
         setImporting(true); setError(null);
 
-        type ExtractedTrack = { name: string; artist: string; durationMs: number; albumArt?: string | null; spotifyTrackId?: string };
-        const clientTracks: ExtractedTrack[] = lines.map(line => {
+        const clientTracks = lines.map(line => {
             const parts = line.split(' - ');
-            if (parts.length >= 2) {
-                return { name: parts.slice(1).join(' - ').trim(), artist: parts[0].trim(), durationMs: 0 };
-            }
+            if (parts.length >= 2) return { name: parts.slice(1).join(' - ').trim(), artist: parts[0].trim(), durationMs: 0 };
             return { name: line, artist: '', durationMs: 0 };
         });
 
-        getSocket().emit('import:start', { playlistUrl: 'https://open.spotify.com/playlist/bulk', clientTracks }, (res) => {
+        void driveImport({ clientTracks, playlistName: 'Pasted songs' }).then((res) => {
             setImporting(false);
             if (res.ok) close();
             else setError(res.error);
@@ -451,7 +459,7 @@ function FixMatchModal({ item, close }: { item: QueueItem; close: () => void }) 
     };
 
     const pick = (v: VideoCandidate) => {
-        getSocket().emit('queue:fixMatch', { queueItemId: item.id, video: v }, (res) => {
+        void api.queue('fixMatch', { queueItemId: item.id, video: v }).then((res) => {
             if (res.ok) close();
         });
     };

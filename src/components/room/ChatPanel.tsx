@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SendHorizonal } from 'lucide-react';
-import { getSocket } from '@/hooks/socket';
+import { api, publishEphemeral } from '@/hooks/api';
+import { EV } from '@/lib/channels';
+import { getSavedNickname } from '@/hooks/useLocalIdentity';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { avatarColorFor } from '@/lib/ids';
 
@@ -24,9 +26,7 @@ export default function ChatPanel() {
     const send = () => {
         const body = draft.trim();
         if (!body) return;
-        getSocket().emit('chat:send', { body }, (res) => {
-            if (!res.ok) setError(res.error);
-        });
+        void api.chat(body).then(res => { if (!res.ok) setError(res.error); });
         setDraft('');
         setError(null);
         stopTyping();
@@ -35,7 +35,7 @@ export default function ChatPanel() {
     const stopTyping = () => {
         if (typingSentRef.current) {
             typingSentRef.current = false;
-            getSocket().emit('chat:typing', { isTyping: false });
+            publishEphemeral(EV.chatTyping, { nickname: getSavedNickname(), isTyping: false });
         }
         if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
@@ -44,7 +44,7 @@ export default function ChatPanel() {
         setDraft(v);
         if (!typingSentRef.current && v.trim()) {
             typingSentRef.current = true;
-            getSocket().emit('chat:typing', { isTyping: true });
+            publishEphemeral(EV.chatTyping, { nickname: getSavedNickname(), isTyping: true });
         }
         if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
         typingTimerRef.current = setTimeout(stopTyping, 2500);

@@ -20,7 +20,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSocket } from './socket';
+import type * as Ably from 'ably';
+import { getAbly } from './realtime';
+import { getSavedNickname } from './useLocalIdentity';
 import type { RtcPeer, RtcSignalData } from '@/lib/types';
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -66,7 +68,7 @@ export interface MediaChat {
     toggleScreen: () => Promise<void>;
 }
 
-export function useMediaChat(selfClientId: string): MediaChat {
+export function useMediaChat(selfClientId: string, roomCode: string): MediaChat {
     const [inCall, setInCall] = useState(false);
     const [micOn, setMicOn] = useState(false);
     const [camOn, setCamOn] = useState(false);
@@ -86,14 +88,32 @@ export function useMediaChat(selfClientId: string): MediaChat {
         localStreamRef.current = new MediaStream();
     }
 
+    // Dedicated Ably channel for the call: its presence = who's in the call,
+    // and 'signal' messages carry the WebRTC offers/answers/ICE.
+    const callChannelRef = useRef<Ably.RealtimeChannel | null>(null);
+    const getCallChannel = useCallback((): Ably.RealtimeChannel | null => {
+        if (!callChannelRef.current && selfClientId && roomCode) {
+            callChannelRef.current = getAbly(selfClientId).channels.get(`room:${roomCode}:call`);
+        }
+        return callChannelRef.current;
+    }, [selfClientId, roomCode]);
+
+    const sendSignal = useCallback((to: string, data: RtcSignalData) => {
+        const ch = getCallChannel();
+        if (ch) void ch.publish('signal', { to, from: selfClientId, data });
+    }, [getCallChannel, selfClientId]);
+
+    const screenActiveRef = useRef(false);
     const emitState = useCallback(() => {
-        getSocket().emit('rtc:setState', {
+        const ch = getCallChannel();
+        if (!ch) return;
+        void ch.presence.update({
+            nickname: getSavedNickname(),
             audio: !!micTrack.current && micTrack.current.enabled,
             video: !!videoTrack.current && !screenActiveRef.current,
             screen: screenActiveRef.current
         });
-    }, []);
-    const screenActiveRef = useRef(false);
+    }, [getCallChannel]);
 
     const refreshPeersState = useCallback(() => {
         const list: RemotePeer[] = [];
@@ -126,7 +146,7 @@ export function useMediaChat(selfClientId: string): MediaChat {
             try {
                 link.makingOffer = true;
                 await pc.setLocalDescription();
-                getSocket().emit('rtc:signal', { to: peerId, data: { description: pc.localDescription!.toJSON() as RtcSignalData['description'] } });
+                sendSignal(peerId, { description: pc.localDescription!.toJSON() as RtcSignalData['description'] });
             } catch (err) {
                 console.error('[rtc] negotiation error', err);
             } finally {
@@ -135,14 +155,11 @@ export function useMediaChat(selfClientId: string): MediaChat {
         };
         pc.onicecandidate = ({ candidate }) => {
             if (candidate && candidate.candidate) {
-                getSocket().emit('rtc:signal', {
-                    to: peerId,
-                    data: {
-                        candidate: {
-                            candidate: candidate.candidate,
-                            sdpMid: candidate.sdpMid ?? null,
-                            sdpMLineIndex: candidate.sdpMLineIndex ?? null
-                        }
+                sendSignal(peerId, {
+                    candidate: {
+                        candidate: candidate.candidate,
+                        sdpMid: candidate.sdpMid ?? null,
+                        sdpMLineIndex: candidate.sdpMLineIndex ?? null
                     }
                 });
             }
@@ -170,27 +187,41 @@ export function useMediaChat(selfClientId: string): MediaChat {
         refreshPeersState();
     }, [refreshPeersState]);
 
-    /* ── signaling in ── */
+    /* ── call-channel presence + signaling in ── */
     useEffect(() => {
-        const socket = getSocket();
+        const ch = getCallChannel();
+        if (!ch) return;
 
-        const onPeers = ({ peers: list }: { peers: RtcPeer[] }) => {
-            presenceRef.current = Object.fromEntries(list.map(p => [p.clientId, p]));
-            if (inCallRef.current) {
-                const ids = new Set(list.map(p => p.clientId));
-                // New peers → connect (impolite side's negotiationneeded drives the offer)
-                for (const p of list) {
-                    if (p.clientId === selfClientId) continue;
-                    if (!links.current.has(p.clientId)) createLink(p.clientId);
+        const rebuildPresence = async () => {
+            try {
+                const members = await ch.presence.get();
+                presenceRef.current = Object.fromEntries(
+                    members.filter(m => m.clientId).map(m => {
+                        const d = (m.data ?? {}) as Partial<RtcPeer>;
+                        return [m.clientId!, {
+                            clientId: m.clientId!, nickname: d.nickname ?? 'Guest',
+                            audio: !!d.audio, video: !!d.video, screen: !!d.screen
+                        } as RtcPeer];
+                    })
+                );
+                if (inCallRef.current) {
+                    const ids = new Set(members.map(m => m.clientId));
+                    for (const m of members) {
+                        if (m.clientId && m.clientId !== selfClientId && !links.current.has(m.clientId)) createLink(m.clientId);
+                    }
+                    for (const id of [...links.current.keys()]) if (!ids.has(id)) closeLink(id);
                 }
-                // Gone peers → tear down
-                for (const id of [...links.current.keys()]) if (!ids.has(id)) closeLink(id);
-            }
-            refreshPeersState();
+                refreshPeersState();
+            } catch { /* ignore */ }
         };
 
-        const onSignal = async ({ from, data }: { from: string; data: RtcSignalData }) => {
+        const onPresence = () => { void rebuildPresence(); };
+        ch.presence.subscribe(['enter', 'leave', 'update', 'present'], onPresence);
+
+        const onSignal = async (msg: Ably.Message) => {
             if (!inCallRef.current) return;
+            const { to, from, data } = (msg.data ?? {}) as { to: string; from: string; data: RtcSignalData };
+            if (to !== selfClientId || from === selfClientId) return;
             let link = links.current.get(from);
             if (!link) link = createLink(from);
             const { pc } = link;
@@ -202,7 +233,7 @@ export function useMediaChat(selfClientId: string): MediaChat {
                     await pc.setRemoteDescription(desc);
                     if (desc.type === 'offer') {
                         await pc.setLocalDescription();
-                        getSocket().emit('rtc:signal', { to: from, data: { description: pc.localDescription!.toJSON() as RtcSignalData['description'] } });
+                        sendSignal(from, { description: pc.localDescription!.toJSON() as RtcSignalData['description'] });
                     }
                 } else if (data.candidate) {
                     try { await pc.addIceCandidate(data.candidate as RTCIceCandidateInit); } catch { /* ignore late candidates */ }
@@ -211,11 +242,13 @@ export function useMediaChat(selfClientId: string): MediaChat {
                 console.error('[rtc] signal handling error', err);
             }
         };
+        ch.subscribe('signal', onSignal);
 
-        socket.on('rtc:peers', onPeers);
-        socket.on('rtc:signal', onSignal);
-        return () => { socket.off('rtc:peers', onPeers); socket.off('rtc:signal', onSignal); };
-    }, [selfClientId, createLink, closeLink, refreshPeersState]);
+        return () => {
+            try { ch.presence.unsubscribe(onPresence); } catch { /* ignore */ }
+            try { ch.unsubscribe('signal', onSignal); } catch { /* ignore */ }
+        };
+    }, [selfClientId, getCallChannel, sendSignal, createLink, closeLink, refreshPeersState]);
 
     /* ── local media helpers ── */
 
@@ -246,22 +279,22 @@ export function useMediaChat(selfClientId: string): MediaChat {
             setAudioOnLinks(micTrack.current);
             inCallRef.current = true;
             setInCall(true);
-            getSocket().emit('rtc:join', (res) => {
-                if (!res.ok) { setError(res.error); return; }
-                presenceRef.current = Object.fromEntries(res.peers.map(p => [p.clientId, p]));
-                for (const p of res.peers) {
-                    if (p.clientId !== selfClientId && !links.current.has(p.clientId)) createLink(p.clientId);
+            const ch = getCallChannel();
+            if (ch) {
+                await ch.presence.enter({ nickname: getSavedNickname(), audio: true, video: false, screen: false });
+                const members = await ch.presence.get();
+                for (const m of members) {
+                    if (m.clientId && m.clientId !== selfClientId && !links.current.has(m.clientId)) createLink(m.clientId);
                 }
-                emitState();
                 refreshPeersState();
-            });
+            }
         } catch {
             setError('Could not access your microphone. Check browser permissions.');
         }
-    }, [selfClientId, createLink, emitState, refreshPeersState]);
+    }, [selfClientId, getCallChannel, createLink, refreshPeersState]);
 
     const leaveCall = useCallback(() => {
-        getSocket().emit('rtc:leave');
+        try { getCallChannel()?.presence.leave(); } catch { /* ignore */ }
         inCallRef.current = false;
         for (const id of [...links.current.keys()]) closeLink(id);
         micTrack.current?.stop(); micTrack.current = null;
@@ -271,7 +304,7 @@ export function useMediaChat(selfClientId: string): MediaChat {
         setLocalStream(null);
         setInCall(false); setMicOn(false); setCamOn(false); setScreenOn(false);
         setPeers([]);
-    }, [closeLink]);
+    }, [closeLink, getCallChannel]);
 
     const toggleMic = useCallback(async () => {
         if (!micTrack.current) {

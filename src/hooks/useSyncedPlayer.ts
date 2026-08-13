@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSocket } from './socket';
+import { api } from './api';
 import { useRoomStore } from './useRoomStore';
 
 /* Minimal typings for the IFrame API surface we use */
@@ -118,25 +118,19 @@ export function useSyncedPlayer() {
             if (st.playback.queueItemId && st.playback.mediaUrl
                 && reportedEndForRef.current !== st.playback.queueItemId) {
                 reportedEndForRef.current = st.playback.queueItemId;
-                getSocket().emit('playback:ended', {
-                    queueItemId: st.playback.queueItemId,
-                    positionMs: media.currentTime * 1000
-                });
+                void api.playback('ended', { queueItemId: st.playback.queueItemId, positionMs: media.currentTime * 1000 });
             }
         });
         media.addEventListener('error', () => {
             const st = useRoomStore.getState();
             if (st.playback.queueItemId && st.playback.mediaUrl) {
-                getSocket().emit('playback:error', { queueItemId: st.playback.queueItemId, code: 2 });
+                void api.playback('error', { queueItemId: st.playback.queueItemId, code: 2 });
             }
         });
         media.addEventListener('loadedmetadata', () => {
             const st = useRoomStore.getState();
             if (st.playback.queueItemId && st.playback.mediaUrl && Number.isFinite(media.duration)) {
-                getSocket().emit('playback:duration', {
-                    queueItemId: st.playback.queueItemId,
-                    durationMs: media.duration * 1000
-                });
+                void api.playback('duration', { queueItemId: st.playback.queueItemId, durationMs: media.duration * 1000 });
             }
         });
         container.appendChild(media);
@@ -166,16 +160,13 @@ export function useSyncedPlayer() {
                         if (e.data === STATE.ENDED && st.playback.queueItemId && st.playback.videoId
                             && reportedEndForRef.current !== st.playback.queueItemId) {
                             reportedEndForRef.current = st.playback.queueItemId;
-                            getSocket().emit('playback:ended', {
-                                queueItemId: st.playback.queueItemId,
-                                positionMs: (playerRef.current?.getCurrentTime() ?? 0) * 1000
-                            });
+                            void api.playback('ended', { queueItemId: st.playback.queueItemId, positionMs: (playerRef.current?.getCurrentTime() ?? 0) * 1000 });
                         }
                     },
                     onError: (e: { data: number }) => {
                         const st = useRoomStore.getState();
                         if (st.playback.queueItemId && st.playback.videoId) {
-                            getSocket().emit('playback:error', { queueItemId: st.playback.queueItemId, code: e.data });
+                            void api.playback('error', { queueItemId: st.playback.queueItemId, code: e.data });
                         }
                     }
                 }

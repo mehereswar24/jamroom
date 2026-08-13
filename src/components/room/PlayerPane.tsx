@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
     Disc3, ExternalLink, GripHorizontal, Headphones, Maximize, Maximize2, Minimize, Minimize2, Move, Pause, Pin, PinOff, Play, Repeat, Repeat1, SkipBack, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut
 } from 'lucide-react';
-import { getSocket } from '@/hooks/socket';
+import { api, publishEphemeral } from '@/hooks/api';
+import { EV } from '@/lib/channels';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { useSyncedPlayer } from '@/hooks/useSyncedPlayer';
 import { formatDuration } from '@/lib/ids';
@@ -118,11 +119,11 @@ export default function PlayerPane() {
         setIsScrubbing(false);
         try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
         const finalMs = calcPosFromEvent(e);
-        getSocket().emit('playback:seek', { positionMs: finalMs }, () => {});
+        void api.playback('seek', { positionMs: finalMs });
     };
 
     const emitControl = (ev: 'playback:play' | 'playback:pause' | 'playback:skip') =>
-        getSocket().emit(ev, () => {});
+        void api.playback(ev.replace('playback:', ''));
 
     const displayPosMs = isScrubbing ? scrubPosMs : posMs;
     const progressPct = current?.durationMs ? Math.min(100, (displayPosMs / current.durationMs) * 100) : 0;
@@ -226,7 +227,7 @@ export default function PlayerPane() {
                         {/* Vote Skip Button */}
                         {current && (
                             <button
-                                onClick={() => getSocket().emit('queue:voteSkip', () => {})}
+                                onClick={() => void api.queue('voteSkip')}
                                 title={votedSkip ? 'Withdraw skip vote' : 'Vote to skip'}
                                 className={`flex items-center gap-1 text-xs font-medium rounded-xl sm:rounded-2xl px-2.5 sm:px-3.5 py-2 sm:py-2.5 border transition-all cursor-pointer ${
                                     votedSkip
@@ -243,7 +244,7 @@ export default function PlayerPane() {
                         {canControl ? (
                             <>
                                 <button
-                                    onClick={() => getSocket().emit('playback:previous', () => {})}
+                                    onClick={() => void api.playback('previous')}
                                     className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 flex items-center justify-center transition-all cursor-pointer text-white"
                                     title="Previous Track (or Restart Track)"
                                 >
@@ -271,7 +272,7 @@ export default function PlayerPane() {
                                     onClick={() => {
                                         const curMode = playback.loopMode ?? 'off';
                                         const nextMode = curMode === 'off' ? 'all' : curMode === 'all' ? 'one' : 'off';
-                                        getSocket().emit('playback:setLoop', { mode: nextMode }, () => {});
+                                        void api.playback('setLoop', { mode: nextMode });
                                     }}
                                     className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
                                         playback.loopMode === 'one' || playback.loopMode === 'all'

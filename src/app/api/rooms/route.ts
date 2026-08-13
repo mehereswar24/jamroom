@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { newRoomCode } from '@/lib/ids';
-import { createRoom, getRoom } from '@/server/db/repos';
+import * as store from '@/server/store/roomStore';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
     try {
@@ -12,16 +13,12 @@ export async function POST(req: Request) {
         if (!hostClientId) return NextResponse.json({ ok: false, error: 'Missing clientId' }, { status: 400 });
 
         let code = newRoomCode();
-        let attempts = 0;
-        while (attempts < 10 && getRoom(code)) {
-            code = newRoomCode();
-            attempts++;
-        }
-        createRoom(code, name, hostClientId);
+        for (let i = 0; i < 10 && await store.roomExists(code); i++) code = newRoomCode();
+        await store.createRoom(code, name, hostClientId);
         return NextResponse.json({ ok: true, code });
     } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error('[api/rooms] create failed:', errorMsg);
-        return NextResponse.json({ ok: false, error: `Could not create room: ${errorMsg}` }, { status: 500 });
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[api/rooms] create failed:', msg);
+        return NextResponse.json({ ok: false, error: `Could not create room: ${msg}` }, { status: 500 });
     }
 }

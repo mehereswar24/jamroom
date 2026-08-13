@@ -6,7 +6,7 @@ import { AlertTriangle, Check, Copy, Crown, Disc3, ListMusic, MessageCircle, Set
 import { useLocalIdentity } from '@/hooks/useLocalIdentity';
 import { useRoomConnection } from '@/hooks/useRoomConnection';
 import { useRoomStore } from '@/hooks/useRoomStore';
-import { getSocket } from '@/hooks/socket';
+import { api } from '@/hooks/api';
 import { useMediaChat } from '@/hooks/useMediaChat';
 import PlayerPane from './PlayerPane';
 import QueuePanel from './QueuePanel';
@@ -72,7 +72,7 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
     const [tab, setTab] = useState<'queue' | 'chat'>('queue');
     const [copied, setCopied] = useState(false);
     const [hostMenuOpen, setHostMenuOpen] = useState(false);
-    const call = useMediaChat(selfClientId);
+    const call = useMediaChat(selfClientId, roomCode);
 
     const isHost = selfClientId === hostClientId;
 
@@ -87,10 +87,7 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
             <CenterNote text={joinError}>
                 <div className="flex items-center gap-3 mt-3">
                     <button
-                        onClick={() => {
-                            useRoomStore.getState().setJoinError(null);
-                            getSocket().connect();
-                        }}
+                        onClick={() => { useRoomStore.getState().setJoinError(null); window.location.reload(); }}
                         className="px-4 py-2 bg-white text-black font-bold text-xs rounded-xl shadow hover:bg-slate-200 cursor-pointer"
                     >
                         Retry Connection
@@ -102,15 +99,12 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
     }
     if (!joined) {
         return (
-            <CenterNote text="Connecting to synced audio room…">
+            <CenterNote text="Connecting to the room…">
                 <button
-                    onClick={() => {
-                        getSocket().disconnect();
-                        getSocket().connect();
-                    }}
+                    onClick={() => window.location.reload()}
                     className="mt-3 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs rounded-xl cursor-pointer"
                 >
-                    Stuck? Re-connect Socket
+                    Stuck? Reload
                 </button>
             </CenterNote>
         );
@@ -253,7 +247,7 @@ function HostMenu({ close, guestControls, members }: {
     const toggleGuestControls = () => {
         const next = !guestControls;
         useRoomStore.getState().setGuestControls(next);
-        getSocket().emit('room:setGuestControls', { enabled: next }, () => {});
+        void api.room('setGuestControls', { enabled: next });
     };
 
     return (
@@ -295,7 +289,7 @@ function HostMenu({ close, guestControls, members }: {
                                 <button
                                     key={m.clientId}
                                     onClick={() => {
-                                        getSocket().emit('room:transferHost', { clientId: m.clientId }, () => {});
+                                        void api.room('transferHost', { targetClientId: m.clientId });
                                         close();
                                     }}
                                     className="w-full text-left text-xs px-3 py-2 rounded-xl hover:bg-purple-500/20 border border-transparent hover:border-purple-500/30 transition-all flex items-center justify-between cursor-pointer"
