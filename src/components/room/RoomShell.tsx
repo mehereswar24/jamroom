@@ -72,6 +72,7 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
     const [tab, setTab] = useState<'queue' | 'chat'>('queue');
     const [copied, setCopied] = useState(false);
     const [hostMenuOpen, setHostMenuOpen] = useState(false);
+    const call = useMediaChat(selfClientId);
 
     const isHost = selfClientId === hostClientId;
 
@@ -175,6 +176,11 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
                         </div>
                     </div>
 
+                    {/* Join / leave voice+video call */}
+                    {!call.inCall && (
+                        <CallBar call={call} selfNickname={nickname} selfClientId={selfClientId} />
+                    )}
+
                     {/* Host Controls Menu Button */}
                     {isHost && (
                         <div className="relative">
@@ -206,6 +212,11 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
                 }`}>
                     <AlertTriangle size={15} className="shrink-0" /> <span>{notice.text}</span>
                 </div>
+            )}
+
+            {/* Voice / video / screen-share call strip (only while in a call) */}
+            {call.inCall && (
+                <CallBar call={call} selfNickname={nickname} selfClientId={selfClientId} />
             )}
 
             {/* Room Main Grid: Player Pane + Side Panel (Queue & Chat) */}

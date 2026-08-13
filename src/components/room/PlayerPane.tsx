@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-    Disc3, Headphones, Pause, Play, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi
+    Disc3, ExternalLink, GripHorizontal, Headphones, Maximize2, Minimize2, Move, Pause, Pin, PinOff, Play, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi
 } from 'lucide-react';
 import { getSocket } from '@/hooks/socket';
 import { useRoomStore } from '@/hooks/useRoomStore';
@@ -35,6 +35,35 @@ export default function PlayerPane() {
     const current = queue.find(q => q.id === playback.queueItemId) ?? null;
     const votedSkip = voteSkip.voters.includes(selfClientId);
 
+    /* Floating & Draggable Card State */
+    const [isFloating, setIsFloating] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [pos, setPos] = useState({ x: 20, y: 80 });
+    const isDraggingRef = useRef(false);
+    const dragOffsetRef = useRef({ x: 0, y: 0 });
+
+    const onPointerDown = (e: React.PointerEvent) => {
+        if (!isFloating) return;
+        isDraggingRef.current = true;
+        dragOffsetRef.current = {
+            x: e.clientX - pos.x,
+            y: e.clientY - pos.y
+        };
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e: React.PointerEvent) => {
+        if (!isDraggingRef.current) return;
+        const newX = Math.max(10, Math.min(window.innerWidth - 300, e.clientX - dragOffsetRef.current.x));
+        const newY = Math.max(10, Math.min(window.innerHeight - 180, e.clientY - dragOffsetRef.current.y));
+        setPos({ x: newX, y: newY });
+    };
+
+    const onPointerUp = (e: React.PointerEvent) => {
+        isDraggingRef.current = false;
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    };
+
     /* Smooth progress readout */
     const [posMs, setPosMs] = useState(0);
     useEffect(() => {
@@ -66,8 +95,53 @@ export default function PlayerPane() {
     const emitControl = (ev: 'playback:play' | 'playback:pause' | 'playback:skip') =>
         getSocket().emit(ev, () => {});
 
-    return (
-        <div className="flex flex-col gap-4 min-h-0">
+    const content = (
+        <div className="flex flex-col gap-3 min-h-0">
+            {/* Top Bar with Float / Dock Controls */}
+            <div className="flex items-center justify-between gap-2 px-1">
+                <div
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    className={`flex items-center gap-2 text-xs font-mono font-bold tracking-wider text-white/50 ${
+                        isFloating ? 'cursor-grab active:cursor-grabbing hover:text-white select-none' : ''
+                    }`}
+                >
+                    {isFloating && <GripHorizontal size={16} className="text-white/70" />}
+                    <span>{isFloating ? 'DRAG ANYWHERE' : 'STAGE PLAYER'}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    {isFloating ? (
+                        <>
+                            <button
+                                onClick={() => setIsMinimized(!isMinimized)}
+                                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all cursor-pointer"
+                                title={isMinimized ? 'Expand Player' : 'Minimize Player'}
+                            >
+                                {isMinimized ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
+                            </button>
+                            <button
+                                onClick={() => { setIsFloating(false); setIsMinimized(false); }}
+                                className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                title="Dock player back into grid"
+                            >
+                                <PinOff size={13} />
+                                <span>Dock</span>
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => { setIsFloating(true); setIsMinimized(false); }}
+                            className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                            title="Float player into draggable window"
+                        >
+                            <ExternalLink size={13} />
+                            <span>Float Player</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* Main Video/Audio Player Shell */}
             <div className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] bg-black/80 border border-white/10 shadow-2xl">
                 <div ref={containerRef} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
@@ -254,4 +328,82 @@ export default function PlayerPane() {
             </div>
         </div>
     );
+
+    if (isFloating) {
+        if (isMinimized) {
+            return (
+                <div
+                    style={{ left: pos.x, top: pos.y }}
+                    className="fixed z-[100] w-80 bg-black/90 backdrop-blur-xl border border-white/20 rounded-2xl p-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3 select-none"
+                >
+                    <div
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        className="cursor-grab active:cursor-grabbing text-white/40 hover:text-white p-1"
+                        title="Drag Mini Player"
+                    >
+                        <GripHorizontal size={18} />
+                    </div>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        {current?.albumArtUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={current.albumArtUrl} alt="" className="w-9 h-9 rounded-xl object-cover border border-white/10 shrink-0" />
+                        ) : (
+                            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                                <Disc3 size={16} className="text-white/40" />
+                            </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-white truncate">{current?.title ?? 'JamRoom'}</p>
+                            <p className="text-[10px] text-white/50 truncate">{current?.artist ?? 'Floating Player'}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        {canControl && (
+                            <button
+                                onClick={() => emitControl(playback.isPlaying ? 'playback:pause' : 'playback:play')}
+                                className="w-8 h-8 rounded-xl bg-white text-black flex items-center justify-center cursor-pointer hover:bg-slate-200"
+                            >
+                                {playback.isPlaying ? <Pause size={14} className="fill-black text-black" /> : <Play size={14} className="ml-0.5 fill-black text-black" />}
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setIsMinimized(false)}
+                            className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all cursor-pointer"
+                            title="Expand Player"
+                        >
+                            <Maximize2 size={14} />
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <>
+                {/* Docked Placeholder */}
+                <div className="glass rounded-3xl p-6 border-white/10 border-dashed border-2 text-center text-white/40 flex flex-col items-center justify-center gap-2 min-h-[160px]">
+                    <Move size={24} className="text-white/30 animate-bounce" />
+                    <p className="text-xs font-semibold text-white/60">Stage player is currently floating on screen</p>
+                    <button
+                        onClick={() => setIsFloating(false)}
+                        className="mt-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs text-white cursor-pointer"
+                    >
+                        Dock Back to Grid
+                    </button>
+                </div>
+
+                {/* Floating Draggable Card */}
+                <div
+                    style={{ left: pos.x, top: pos.y }}
+                    className="fixed z-[100] w-[90vw] max-w-[480px] bg-black/90 backdrop-blur-2xl border border-white/20 rounded-3xl p-4 shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col gap-3"
+                >
+                    {content}
+                </div>
+            </>
+        );
+    }
+
+    return content;
 }
