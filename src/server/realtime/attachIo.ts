@@ -48,8 +48,13 @@ export function attachIo(httpServer: HttpServer): Server<ClientToServerEvents, S
                 const clientId = String(p?.clientId ?? '').trim().slice(0, 64);
                 if (!code || !nickname || !clientId) return ack({ ok: false, error: 'Missing nickname or room code' });
 
-                const room = rooms.get(code);
-                if (!room) return ack({ ok: false, error: 'Room not found — check the code' });
+                let room = rooms.get(code);
+                if (!room) {
+                    // Auto-create room if lazily joining a new room code or after server restart
+                    repos.createRoom(code, `${nickname}'s Studio`, clientId);
+                    room = rooms.get(code);
+                }
+                if (!room) return ack({ ok: false, error: 'Could not initialize room' });
 
                 // Leave any previous room on this socket
                 if (ctx.roomCode && ctx.roomCode !== code) {
@@ -336,6 +341,42 @@ export function attachIo(httpServer: HttpServer): Server<ClientToServerEvents, S
             io.to(room.code).volatile.emit('chat:reaction', {
                 clientId: ctx.clientId!, nickname: ctx.nickname, emoji, x: Math.random()
             });
+        });
+
+        /* ── WebRTC signaling (mesh; server only relays) ── */
+
+        socket.on('rtc:join', (ack) => {
+            const room = requireMember();
+            if (!room) return ack({ ok: false, error: 'Not in a room' });
+            if (!room.rtcPeers.has(ctx.clientId!)) {
+                room.rtcPeers.set(ctx.clientId!, { audio: false, video: false, screen: false });
+            }
+            const peers = [...room.rtcPeers.entries()].map(([clientId, flags]) => ({
+                clientId, nickname: room.nicknameFor(clientId), ...flags
+            }));
+            rooms.broadcastRtcPeers(room);
+            ack({ ok: true, peers });
+        });
+
+        socket.on('rtc:leave', () => {
+            const room = requireMember(); if (!room) return;
+            rooms.rtcRemove(room, ctx.clientId!);
+        });
+
+        socket.on('rtc:setState', (p) => {
+            const room = requireMember(); if (!room) return;
+            if (!room.rtcPeers.has(ctx.clientId!)) return;
+            room.rtcPeers.set(ctx.clientId!, {
+                audio: !!p?.audio, video: !!p?.video, screen: !!p?.screen
+            });
+            rooms.broadcastRtcPeers(room);
+        });
+
+        socket.on('rtc:signal', (p) => {
+            const room = requireMember(); if (!room) return;
+            const to = String(p?.to ?? '');
+            if (!to || !p?.data) return;
+            rooms.relayRtcSignal(room, to, ctx.clientId!, p.data);
         });
 
         socket.on('disconnect', () => {

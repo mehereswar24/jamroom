@@ -65,7 +65,9 @@ export function useRoomConnection(roomCode: string, nickname: string, clientId: 
 
         const onConnect = () => { join(); void syncClock(); };
         socket.on('connect', onConnect);
-        if (socket.connected) onConnect();
+        socket.connect();
+        join(); // Trigger immediate join attempt
+        if (socket.connected) void syncClock();
 
         socket.on('room:members', (p) => st.setMembers(p.members, p.hostClientId));
         socket.on('room:guestControls', (p) => st.setGuestControls(p.enabled));

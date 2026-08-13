@@ -81,6 +81,14 @@ export class RoomState {
         return new Set([...this.sockets.values()].map(m => m.clientId));
     }
 
+    socketIdsForClient(clientId: string): string[] {
+        return [...this.sockets.entries()].filter(([, m]) => m.clientId === clientId).map(([sid]) => sid);
+    }
+
+    nicknameFor(clientId: string): string {
+        return [...this.sockets.values()].find(m => m.clientId === clientId)?.nickname ?? 'Guest';
+    }
+
     isHost(clientId: string): boolean { return clientId === this.hostClientId; }
 
     canControl(clientId: string): boolean { return this.guestControls || this.isHost(clientId); }
@@ -168,6 +176,25 @@ export class RoomManager {
 
     broadcastVoteSkip(room: RoomState): void {
         this.io.to(room.code).emit('queue:voteSkip', room.voteSkipState());
+    }
+
+    broadcastRtcPeers(room: RoomState): void {
+        const peers = [...room.rtcPeers.entries()].map(([clientId, flags]) => ({
+            clientId, nickname: room.nicknameFor(clientId), ...flags
+        }));
+        this.io.to(room.code).emit('rtc:peers', { peers });
+    }
+
+    /** Relay a signaling message to every socket of one client. */
+    relayRtcSignal(room: RoomState, toClientId: string, fromClientId: string, data: import('../../lib/types').RtcSignalData): void {
+        for (const sid of room.socketIdsForClient(toClientId)) {
+            this.io.to(sid).emit('rtc:signal', { from: fromClientId, data });
+        }
+    }
+
+    /** Drop a client from the call (on explicit leave or disconnect). */
+    rtcRemove(room: RoomState, clientId: string): void {
+        if (room.rtcPeers.delete(clientId)) this.broadcastRtcPeers(room);
     }
 
     systemMessage(room: RoomState, body: string): void {
@@ -315,6 +342,7 @@ export class RoomManager {
         const stillConnected = room.connectedClientIds().has(m.clientId);
         if (!stillConnected) {
             this.systemMessage(room, `${m.nickname} left`);
+            this.rtcRemove(room, m.clientId);   // drop from the call if they were in it
             if (m.clientId === room.hostClientId) {
                 room.setHostGraceTimer(setTimeout(() => this.transferHostToEldest(room), HOST_GRACE_MS));
             }

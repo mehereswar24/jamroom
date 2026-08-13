@@ -71,4 +71,7 @@ export interface ServerToClientEvents {
 
     'import:progress': (p: ImportProgressPayload) => void;
     'import:complete': (p: ImportCompletePayload) => void;
+
+    'rtc:peers': (p: { peers: RtcPeer[] }) => void;
+    'rtc:signal': (p: { from: string; data: RtcSignalData }) => void;
 }

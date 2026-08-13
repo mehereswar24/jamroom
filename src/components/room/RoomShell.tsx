@@ -7,9 +7,11 @@ import { useLocalIdentity } from '@/hooks/useLocalIdentity';
 import { useRoomConnection } from '@/hooks/useRoomConnection';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { getSocket } from '@/hooks/socket';
+import { useMediaChat } from '@/hooks/useMediaChat';
 import PlayerPane from './PlayerPane';
 import QueuePanel from './QueuePanel';
 import ChatPanel from './ChatPanel';
+import CallBar from './CallBar';
 
 export default function RoomShell({ roomCode }: { roomCode: string }) {
     const { nickname, clientId, setNickname } = useLocalIdentity();
