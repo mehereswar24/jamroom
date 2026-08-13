@@ -208,7 +208,7 @@ export function useSyncedPlayer() {
         const { videoId, mediaUrl } = st.playback;
         reportedEndForRef.current = null;
         recentSeeksRef.current = [];
-        if (videoId && playerRef.current) {
+        if (videoId && playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
             loadedVideoRef.current = videoId;
             loadedMediaRef.current = null;
             mediaRef.current?.pause();
