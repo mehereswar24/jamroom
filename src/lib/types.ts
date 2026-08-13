@@ -39,6 +39,7 @@ export interface PlaybackState {
     basePositionMs: number;
     baseServerTime: number;
     isPlaying: boolean;
+    loopMode?: 'off' | 'all' | 'one';
 }
 
 export interface ChatMessage {

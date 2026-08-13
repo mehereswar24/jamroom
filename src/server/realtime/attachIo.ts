@@ -141,6 +141,15 @@ export function attachIo(httpServer: HttpServer): Server<ClientToServerEvents, S
             const room = guardControl(ack); if (!room) return;
             rooms.advance(room, 'skip'); ack({ ok: true });
         });
+        socket.on('playback:previous', (ack) => {
+            const room = guardControl(ack); if (!room) return;
+            rooms.previousItem(room); ack({ ok: true });
+        });
+        socket.on('playback:setLoop', (p, ack) => {
+            const room = guardControl(ack); if (!room) return;
+            const mode = p?.mode === 'one' ? 'one' : p?.mode === 'all' ? 'all' : 'off';
+            rooms.setLoopMode(room, mode); ack({ ok: true });
+        });
         socket.on('playback:playItem', (p, ack) => {
             const room = guardControl(ack); if (!room) return;
             const okPlay = rooms.playItem(room, Number(p?.queueItemId));

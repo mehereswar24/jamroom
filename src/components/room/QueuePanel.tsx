@@ -148,16 +148,16 @@ export default function QueuePanel() {
                             )}
 
                             {/* Track Art / Album Covers */}
-                            <div className="relative shrink-0 w-9 h-9 rounded-xl overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center">
+                            <div className="relative shrink-0 w-9 h-9 rounded-full overflow-hidden bg-white/5 border border-white/10 flex items-center justify-center">
                                 {item.albumArtUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={item.albumArtUrl} alt="" className="w-full h-full object-cover" />
+                                    <img src={item.albumArtUrl} alt="" className="w-full h-full object-cover rounded-full" />
                                 ) : (
                                     <Music2 size={15} className="text-white/30" />
                                 )}
                                 {isCurrent && (
-                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center">
-                                        <Disc3 size={16} className="text-white animate-spin-vinyl" />
+                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center rounded-full">
+                                        <Disc3 size={16} className="text-white animate-spin-vinyl rounded-full" />
                                     </div>
                                 )}
                             </div>

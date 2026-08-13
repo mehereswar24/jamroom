@@ -19,6 +19,8 @@ export interface ClientToServerEvents {
     'playback:pause': (ack: Ack) => void;
     'playback:seek': (p: { positionMs: number }, ack: Ack) => void;
     'playback:skip': (ack: Ack) => void;
+    'playback:previous': (ack: Ack) => void;
+    'playback:setLoop': (p: { mode: 'off' | 'all' | 'one' }, ack: Ack) => void;
     'playback:playItem': (p: { queueItemId: number }, ack: Ack) => void;
     'playback:ended': (p: { queueItemId: number; positionMs: number }) => void;
     'playback:error': (p: { queueItemId: number; code: number }) => void;

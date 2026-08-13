@@ -212,10 +212,7 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
                 </div>
             )}
 
-            {/* Voice / video / screen-share call strip (only while in a call) */}
-            {call.inCall && (
-                <CallBar call={call} selfNickname={nickname} selfClientId={selfClientId} />
-            )}
+
 
             {/* Room Main Grid: Player Pane + Side Panel (Queue & Chat) */}
             <div className="flex-1 grid lg:grid-cols-[1fr_390px] gap-4 min-h-0">

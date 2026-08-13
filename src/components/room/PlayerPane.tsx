@@ -2,23 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-    Disc3, ExternalLink, GripHorizontal, Headphones, Maximize, Maximize2, Minimize, Minimize2, Move, Pause, Pin, PinOff, Play, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut
+    Disc3, ExternalLink, GripHorizontal, Headphones, Maximize, Maximize2, Minimize, Minimize2, Move, Pause, Pin, PinOff, Play, Repeat, Repeat1, SkipBack, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { getSocket } from '@/hooks/socket';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { useSyncedPlayer } from '@/hooks/useSyncedPlayer';
 import { formatDuration } from '@/lib/ids';
-
-const REACTIONS = [
-    { emoji: '🔥', key: '1' },
-    { emoji: '❤️', key: '2' },
-    { emoji: '🎉', key: '3' },
-    { emoji: '😂', key: '4' },
-    { emoji: '😭', key: '5' },
-    { emoji: '🕺', key: '6' },
-    { emoji: '👀', key: '7' },
-    { emoji: '💯', key: '8' }
-];
 
 export default function PlayerPane() {
     const { containerRef, audioJoined, joinAudio, struggling, volume, setVolume } = useSyncedPlayer();
@@ -28,8 +17,6 @@ export default function PlayerPane() {
     const selfClientId = useRoomStore(s => s.selfClientId);
     const hostClientId = useRoomStore(s => s.hostClientId);
     const guestControls = useRoomStore(s => s.guestControls);
-    const reactions = useRoomStore(s => s.reactions);
-    const removeReaction = useRoomStore(s => s.removeReaction);
 
     const canControl = selfClientId === hostClientId || guestControls;
     const current = queue.find(q => q.id === playback.queueItemId) ?? null;
@@ -78,43 +65,74 @@ export default function PlayerPane() {
         try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
     };
 
-    /* Smooth progress readout */
+    /* Smooth 60 FPS progress readout & YouTube-style scrubbing */
     const [posMs, setPosMs] = useState(0);
-    useEffect(() => {
-        const t = setInterval(() => setPosMs(useRoomStore.getState().effectivePos()), 400);
-        return () => clearInterval(t);
-    }, []);
+    const [isScrubbing, setIsScrubbing] = useState(false);
+    const [scrubPosMs, setScrubPosMs] = useState(0);
+    const [hoverMs, setHoverMs] = useState<number | null>(null);
+    const [hoverX, setHoverX] = useState(0);
 
-    /* Keyboard shortcuts for reactions (1-8 keys) */
     useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-            const idx = parseInt(e.key, 10) - 1;
-            if (idx >= 0 && idx < REACTIONS.length) {
-                getSocket().emit('chat:react', { emoji: REACTIONS[idx].emoji });
+        let rafId: number;
+        const update = () => {
+            if (!isScrubbing) {
+                setPosMs(useRoomStore.getState().effectivePos());
             }
+            rafId = requestAnimationFrame(update);
         };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, []);
+        rafId = requestAnimationFrame(update);
+        return () => cancelAnimationFrame(rafId);
+    }, [isScrubbing]);
 
     const seekBarRef = useRef<HTMLDivElement | null>(null);
-    const onSeekClick = (e: React.MouseEvent) => {
-        if (!canControl || !current?.durationMs || !seekBarRef.current) return;
+
+    const calcPosFromEvent = (e: React.PointerEvent) => {
+        if (!seekBarRef.current || !current?.durationMs) return 0;
         const rect = seekBarRef.current.getBoundingClientRect();
         const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-        getSocket().emit('playback:seek', { positionMs: Math.round(frac * current.durationMs) }, () => {});
+        return Math.round(frac * current.durationMs);
+    };
+
+    const onSeekPointerDown = (e: React.PointerEvent) => {
+        if (!canControl || !current?.durationMs || !seekBarRef.current) return;
+        setIsScrubbing(true);
+        const targetMs = calcPosFromEvent(e);
+        setScrubPosMs(targetMs);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+
+    const onSeekPointerMove = (e: React.PointerEvent) => {
+        if (!seekBarRef.current || !current?.durationMs) return;
+        const rect = seekBarRef.current.getBoundingClientRect();
+        const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        setHoverMs(Math.round(frac * current.durationMs));
+        setHoverX(e.clientX - rect.left);
+
+        if (isScrubbing) {
+            setScrubPosMs(Math.round(frac * current.durationMs));
+        }
+    };
+
+    const onSeekPointerUp = (e: React.PointerEvent) => {
+        if (!isScrubbing) return;
+        setIsScrubbing(false);
+        try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+        const finalMs = calcPosFromEvent(e);
+        getSocket().emit('playback:seek', { positionMs: finalMs }, () => {});
     };
 
     const emitControl = (ev: 'playback:play' | 'playback:pause' | 'playback:skip') =>
         getSocket().emit(ev, () => {});
+
+    const displayPosMs = isScrubbing ? scrubPosMs : posMs;
+    const progressPct = current?.durationMs ? Math.min(100, (displayPosMs / current.durationMs) * 100) : 0;
 
     return (
         <div className="flex flex-col gap-3 min-h-0">
             {/* Top Bar with Stage Title & Fullscreen Control */}
             <div className="flex items-center justify-between gap-2 px-1">
                 <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-wider text-white/50">
-                    <Disc3 size={16} className="text-white/70 animate-spin-vinyl" />
+                    <Disc3 size={16} className="text-white/70 animate-spin-vinyl rounded-full" />
                     <span>STAGE PLAYER</span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -133,20 +151,6 @@ export default function PlayerPane() {
             {/* Main Video/Audio Player Shell */}
             <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] bg-black/80 border border-white/10 shadow-2xl">
                 <div ref={containerRef} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
-
-                {/* Floating Emoji Reactions Layer */}
-                <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
-                    {reactions.map(r => (
-                        <span
-                            key={r.id}
-                            onAnimationEnd={() => removeReaction(r.id)}
-                            className="reaction-float absolute bottom-8 text-4xl filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
-                            style={{ left: `${8 + r.x * 80}%` }}
-                        >
-                            {r.emoji}
-                        </span>
-                    ))}
-                </div>
 
                 {!playback.videoId && !playback.mediaUrl && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/40 bg-gradient-to-b from-black/40 to-black/80">
@@ -183,7 +187,7 @@ export default function PlayerPane() {
             {/* Now Playing Bar + Controls */}
             <div className="glass rounded-3xl p-3.5 sm:p-5 border-white/10">
                 <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:flex-nowrap">
-                    {/* Album Art with Vinyl Spin Effect */}
+                    {/* Album Art with Circular Vinyl Spin Effect */}
                     <div className="relative shrink-0">
                         {current?.albumArtUrl ? (
                             <div className="relative group">
@@ -191,13 +195,13 @@ export default function PlayerPane() {
                                 <img
                                     src={current.albumArtUrl}
                                     alt=""
-                                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-white/15 shadow-md ${playback.isPlaying ? 'animate-spin-vinyl' : ''}`}
+                                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border border-white/20 shadow-md ${playback.isPlaying ? 'animate-spin-vinyl' : ''}`}
                                 />
-                                <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none" />
+                                <div className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/10 pointer-events-none" />
                             </div>
                         ) : (
-                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                                <Disc3 size={22} className="text-white/30" />
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                                <Disc3 size={22} className="text-white/30 rounded-full" />
                             </div>
                         )}
                     </div>
@@ -235,9 +239,17 @@ export default function PlayerPane() {
                             </button>
                         )}
 
-                        {/* Playback Controls */}
+                        {/* Playback Controls: Previous, Play/Pause, Next, Loop */}
                         {canControl ? (
                             <>
+                                <button
+                                    onClick={() => getSocket().emit('playback:previous', () => {})}
+                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 flex items-center justify-center transition-all cursor-pointer text-white"
+                                    title="Previous Track (or Restart Track)"
+                                >
+                                    <SkipBack size={16} />
+                                </button>
+
                                 <button
                                     onClick={() => emitControl(playback.isPlaying ? 'playback:pause' : 'playback:play')}
                                     className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-200 active:scale-95 flex items-center justify-center shadow-[0_0_25px_rgba(255,255,255,0.4)] transition-all cursor-pointer text-black"
@@ -245,12 +257,39 @@ export default function PlayerPane() {
                                 >
                                     {playback.isPlaying ? <Pause size={18} className="fill-black text-black" /> : <Play size={18} className="ml-0.5 fill-black text-black" />}
                                 </button>
+
                                 <button
                                     onClick={() => emitControl('playback:skip')}
-                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 flex items-center justify-center transition-all cursor-pointer text-white"
+                                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 flex items-center justify-center transition-all cursor-pointer text-white"
                                     title="Skip Track"
                                 >
                                     <SkipForward size={16} />
+                                </button>
+
+                                {/* Loop Mode Toggle Button */}
+                                <button
+                                    onClick={() => {
+                                        const curMode = playback.loopMode ?? 'off';
+                                        const nextMode = curMode === 'off' ? 'all' : curMode === 'all' ? 'one' : 'off';
+                                        getSocket().emit('playback:setLoop', { mode: nextMode }, () => {});
+                                    }}
+                                    className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+                                        playback.loopMode === 'one' || playback.loopMode === 'all'
+                                            ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)]'
+                                            : 'bg-white/5 border-white/10 text-white/40 hover:text-white/80 hover:bg-white/10'
+                                    }`}
+                                    title={
+                                        playback.loopMode === 'one' ? 'Loop Current Track (Active)' :
+                                        playback.loopMode === 'all' ? 'Loop Entire Queue (Active)' :
+                                        'Looping Disabled (Click to enable)'
+                                    }
+                                >
+                                    {playback.loopMode === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}
+                                    {playback.loopMode && playback.loopMode !== 'off' && (
+                                        <span className="absolute -top-1 -right-1 text-[8px] font-mono font-bold bg-emerald-400 text-black px-1 rounded-full leading-tight">
+                                            {playback.loopMode === 'one' ? '1' : 'ALL'}
+                                        </span>
+                                    )}
                                 </button>
                             </>
                         ) : (
@@ -261,21 +300,48 @@ export default function PlayerPane() {
                     </div>
                 </div>
 
-                {/* Progress Bar & Seek Scrub */}
+                {/* Progress Bar & Seek Scrub - Smooth 60 FPS YouTube-Style Gliding */}
                 <div className="mt-4 flex items-center gap-3">
-                    <span className="text-[11px] font-mono tabular-nums text-white/40 w-10 text-right">{formatDuration(posMs)}</span>
+                    <span className="text-[11px] font-mono tabular-nums text-white/40 w-10 text-right">{formatDuration(displayPosMs)}</span>
                     <div
                         ref={seekBarRef}
-                        onClick={onSeekClick}
-                        className={`flex-1 h-2 rounded-full bg-white/10 relative overflow-hidden transition-all ${
-                            canControl && current ? 'cursor-pointer hover:h-2.5' : ''
+                        onPointerDown={onSeekPointerDown}
+                        onPointerMove={onSeekPointerMove}
+                        onPointerUp={onSeekPointerUp}
+                        onPointerLeave={() => setHoverMs(null)}
+                        className={`group relative flex-1 h-2 rounded-full bg-white/10 select-none py-2 flex items-center ${
+                            canControl && current ? 'cursor-pointer' : ''
                         }`}
-                        title={canControl ? 'Click to seek for everyone' : undefined}
+                        title={canControl ? 'Drag or click to seek' : undefined}
                     >
-                        <div
-                            className="absolute inset-y-0 left-0 bg-white rounded-full transition-all shadow-[0_0_10px_rgba(255,255,255,0.8)]"
-                            style={{ width: current?.durationMs ? `${Math.min(100, (posMs / current.durationMs) * 100)}%` : '0%' }}
-                        />
+                        {/* Track Background Bar */}
+                        <div className="w-full h-2 rounded-full bg-white/10 relative overflow-hidden group-hover:h-2.5 transition-all">
+                            {/* Filled Progress Bar — Pure 60 FPS RAF Gliding */}
+                            <div
+                                className="absolute inset-y-0 left-0 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                                style={{ width: `${progressPct}%` }}
+                            />
+                        </div>
+
+                        {/* YouTube-Style Glowing Drag Knob Handle */}
+                        {canControl && current && (
+                            <div
+                                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-slate-900 shadow-md transform -translate-x-1/2 ${
+                                    isScrubbing ? 'scale-125' : 'scale-0 group-hover:scale-100'
+                                }`}
+                                style={{ left: `${progressPct}%` }}
+                            />
+                        )}
+
+                        {/* YouTube Hover Time Tooltip */}
+                        {hoverMs !== null && current && (
+                            <div
+                                className="absolute -top-7 -translate-x-1/2 bg-black/90 text-white font-mono text-[10px] px-2 py-0.5 rounded-md border border-white/20 pointer-events-none shadow-lg z-30"
+                                style={{ left: `${hoverX}px` }}
+                            >
+                                {formatDuration(hoverMs)}
+                            </div>
+                        )}
                     </div>
                     <span className="text-[11px] font-mono tabular-nums text-white/40 w-10">{current ? formatDuration(current.durationMs) : '0:00'}</span>
 
@@ -289,28 +355,6 @@ export default function PlayerPane() {
                             onChange={e => setVolume(Number(e.target.value))}
                             className="w-20 accent-violet-500 cursor-pointer"
                         />
-                    </div>
-                </div>
-
-                {/* Interactive Emoji Burst Bar */}
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-1 overflow-x-auto">
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-white/30 hidden sm:inline">
-                        Reactions:
-                    </span>
-                    <div className="flex items-center gap-1.5 flex-1 justify-around sm:justify-start">
-                        {REACTIONS.map(r => (
-                            <button
-                                key={r.emoji}
-                                onClick={() => getSocket().emit('chat:react', { emoji: r.emoji })}
-                                title={`Reaction ${r.emoji} (Press ${r.key})`}
-                                className="group relative text-xl hover:scale-125 active:scale-95 transition-transform px-2 py-1 rounded-xl hover:bg-white/10 cursor-pointer"
-                            >
-                                <span>{r.emoji}</span>
-                                <span className="absolute -bottom-1 right-0.5 text-[8px] font-mono text-white/20 group-hover:text-accent font-bold">
-                                    {r.key}
-                                </span>
-                            </button>
-                        ))}
                     </div>
                 </div>
             </div>

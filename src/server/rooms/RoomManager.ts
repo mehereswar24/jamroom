@@ -233,8 +233,49 @@ export class RoomManager {
         this.broadcastSync(room, 'seek');
     }
 
+    setLoopMode(room: RoomState, mode: 'off' | 'all' | 'one'): void {
+        room.playback.loopMode = mode;
+        this.broadcastSync(room, 'set-loop');
+    }
+
+    previousItem(room: RoomState): void {
+        const pos = room.effectivePos();
+        // If track has been playing for > 3 seconds, restart current track
+        if (pos > 3000) {
+            this.seek(room, 0);
+            return;
+        }
+
+        const queue = repos.listQueue(room.code);
+        const playable = (q: typeof queue[number]) => q.matchStatus !== 'failed' && (q.youtubeVideoId || q.mediaUrl);
+        const curIdx = queue.findIndex(q => q.id === room.playback.queueItemId);
+        if (curIdx <= 0) {
+            this.seek(room, 0);
+            return;
+        }
+
+        const before = queue.slice(0, curIdx).reverse();
+        const prev = before.find(playable);
+        if (prev) {
+            this.playItem(room, prev.id);
+        } else {
+            this.seek(room, 0);
+        }
+    }
+
     /** Advance to the next playable item after the current one (or first unplayed). */
     advance(room: RoomState, reason: string): void {
+        // Single track loop mode
+        if (room.playback.loopMode === 'one' && (reason === 'ended' || reason === 'end-timer') && room.playback.queueItemId) {
+            this.seek(room, 0);
+            if (!room.playback.isPlaying) {
+                room.playback.isPlaying = true;
+                room.playback.baseServerTime = Date.now();
+                this.broadcastSync(room, 'loop-replay');
+            }
+            return;
+        }
+
         const queue = repos.listQueue(room.code);
         if (room.playback.queueItemId) {
             repos.markPlayed(room.playback.queueItemId);
@@ -242,14 +283,24 @@ export class RoomManager {
         const playable = (q: typeof queue[number]) => q.matchStatus !== 'failed' && (q.youtubeVideoId || q.mediaUrl);
         const curIdx = queue.findIndex(q => q.id === room.playback.queueItemId);
         const after = queue.slice(curIdx + 1);
-        const next = after.find(playable)
+
+        let next = after.find(playable)
             ?? (curIdx === -1 ? queue.find(q => playable(q) && !q.playedAt) : undefined);
+
+        // Queue loop mode ('all')
+        if (!next && room.playback.loopMode === 'all') {
+            next = queue.find(playable);
+        }
 
         room.voteSkip.clear();
         room.clearErrorReports();
 
         if (!next) {
-            room.playback = { queueItemId: null, videoId: null, mediaUrl: null, basePositionMs: 0, baseServerTime: Date.now(), isPlaying: false };
+            room.playback = {
+                queueItemId: null, videoId: null, mediaUrl: null,
+                basePositionMs: 0, baseServerTime: Date.now(), isPlaying: false,
+                loopMode: room.playback.loopMode
+            };
             this.broadcastSync(room, `${reason}:queue-end`);
             this.broadcastQueue(room);
             this.broadcastVoteSkip(room);
@@ -257,7 +308,8 @@ export class RoomManager {
         }
         room.playback = {
             queueItemId: next.id, videoId: next.youtubeVideoId, mediaUrl: next.mediaUrl,
-            basePositionMs: 0, baseServerTime: Date.now(), isPlaying: true
+            basePositionMs: 0, baseServerTime: Date.now(), isPlaying: true,
+            loopMode: room.playback.loopMode
         };
         this.broadcastSync(room, reason);
         this.broadcastQueue(room);
@@ -271,7 +323,8 @@ export class RoomManager {
         room.clearErrorReports();
         room.playback = {
             queueItemId: item.id, videoId: item.youtubeVideoId, mediaUrl: item.mediaUrl,
-            basePositionMs: 0, baseServerTime: Date.now(), isPlaying: true
+            basePositionMs: 0, baseServerTime: Date.now(), isPlaying: true,
+            loopMode: room.playback.loopMode
         };
         this.broadcastSync(room, 'play-item');
         this.broadcastVoteSkip(room);
