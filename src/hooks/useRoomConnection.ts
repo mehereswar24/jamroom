@@ -63,10 +63,19 @@ export function useRoomConnection(roomCode: string, nickname: string, clientId: 
 
         const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
-        const onConnect = () => { join(); void syncClock(); };
+        const onConnect = () => {
+            // A (re)connect landed — clear any earlier "can't reach server"
+            // error and (re)join. Reconnection is automatic; this makes the UI
+            // recover instead of staying stuck on the retry screen.
+            if (useRoomStore.getState().joinError) useRoomStore.getState().setJoinError(null);
+            join();
+            void syncClock();
+        };
+        const onConnectError = (err: Error) => console.warn('[socket] connect_error:', err?.message);
         socket.on('connect', onConnect);
+        socket.on('connect_error', onConnectError);
         socket.connect();
-        join(); // Trigger immediate join attempt
+        join(); // Trigger immediate join attempt (buffered until connected)
         if (socket.connected) void syncClock();
 
         socket.on('room:members', (p) => st.setMembers(p.members, p.hostClientId));
@@ -102,8 +111,10 @@ export function useRoomConnection(roomCode: string, nickname: string, clientId: 
 
         return () => {
             clearInterval(pingTimer);
+            if (joinTimeout) clearTimeout(joinTimeout);
             typingTimeouts.forEach(t => clearTimeout(t));
             socket.off('connect', onConnect);
+            socket.off('connect_error', onConnectError);
             socket.off('room:members');
             socket.off('room:guestControls');
             socket.off('room:notice');

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-    Disc3, ExternalLink, GripHorizontal, Headphones, Maximize2, Minimize2, Move, Pause, Pin, PinOff, Play, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi
+    Disc3, ExternalLink, GripHorizontal, Headphones, Maximize, Maximize2, Minimize, Minimize2, Move, Pause, Pin, PinOff, Play, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { getSocket } from '@/hooks/socket';
 import { useRoomStore } from '@/hooks/useRoomStore';
@@ -38,9 +38,23 @@ export default function PlayerPane() {
     /* Floating & Draggable Card State */
     const [isFloating, setIsFloating] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
+    const [cardWidth, setCardWidth] = useState(480);
     const [pos, setPos] = useState({ x: 20, y: 80 });
     const isDraggingRef = useRef(false);
     const dragOffsetRef = useRef({ x: 0, y: 0 });
+    const stageWrapperRef = useRef<HTMLDivElement | null>(null);
+
+    const zoomIn = () => setCardWidth(w => Math.min(960, w + 80));
+    const zoomOut = () => setCardWidth(w => Math.max(320, w - 80));
+
+    const toggleFullscreen = () => {
+        if (!stageWrapperRef.current) return;
+        if (!document.fullscreenElement) {
+            stageWrapperRef.current.requestFullscreen().catch(() => {});
+        } else {
+            document.exitFullscreen().catch(() => {});
+        }
+    };
 
     const onPointerDown = (e: React.PointerEvent) => {
         if (!isFloating) return;
@@ -54,8 +68,8 @@ export default function PlayerPane() {
 
     const onPointerMove = (e: React.PointerEvent) => {
         if (!isDraggingRef.current) return;
-        const newX = Math.max(10, Math.min(window.innerWidth - 300, e.clientX - dragOffsetRef.current.x));
-        const newY = Math.max(10, Math.min(window.innerHeight - 180, e.clientY - dragOffsetRef.current.y));
+        const newX = Math.max(10, Math.min(window.innerWidth - 200, e.clientX - dragOffsetRef.current.x));
+        const newY = Math.max(10, Math.min(window.innerHeight - 150, e.clientY - dragOffsetRef.current.y));
         setPos({ x: newX, y: newY });
     };
 
@@ -111,8 +125,34 @@ export default function PlayerPane() {
                     <span>{isFloating ? 'DRAG ANYWHERE' : 'STAGE PLAYER'}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                    {/* Fullscreen Toggle */}
+                    <button
+                        onClick={toggleFullscreen}
+                        className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all cursor-pointer"
+                        title="Toggle Fullscreen Video"
+                    >
+                        <Maximize size={14} />
+                    </button>
+
                     {isFloating ? (
                         <>
+                            {/* Zoom In / Out Controls */}
+                            <button
+                                onClick={zoomOut}
+                                disabled={cardWidth <= 320}
+                                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white/80 transition-all cursor-pointer"
+                                title="Decrease Card Size (-)"
+                            >
+                                <ZoomOut size={14} />
+                            </button>
+                            <button
+                                onClick={zoomIn}
+                                disabled={cardWidth >= 960}
+                                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white/80 transition-all cursor-pointer"
+                                title="Increase Card Size (+)"
+                            >
+                                <ZoomIn size={14} />
+                            </button>
                             <button
                                 onClick={() => setIsMinimized(!isMinimized)}
                                 className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-all cursor-pointer"
@@ -143,7 +183,7 @@ export default function PlayerPane() {
             </div>
 
             {/* Main Video/Audio Player Shell */}
-            <div className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] bg-black/80 border border-white/10 shadow-2xl">
+            <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] bg-black/80 border border-white/10 shadow-2xl">
                 <div ref={containerRef} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
 
                 {/* Floating Emoji Reactions Layer */}
@@ -396,8 +436,8 @@ export default function PlayerPane() {
 
                 {/* Floating Draggable Card */}
                 <div
-                    style={{ left: pos.x, top: pos.y }}
-                    className="fixed z-[100] w-[90vw] max-w-[480px] bg-black/90 backdrop-blur-2xl border border-white/20 rounded-3xl p-4 shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col gap-3"
+                    style={{ left: pos.x, top: pos.y, width: `${cardWidth}px`, maxWidth: '95vw' }}
+                    className="fixed z-[100] bg-black/90 backdrop-blur-2xl border border-white/20 rounded-3xl p-4 shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col gap-3 transition-[width] duration-200"
                 >
                     {content}
                 </div>
