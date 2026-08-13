@@ -28,41 +28,54 @@ export default function CallBar({ call, selfNickname, selfClientId }: {
     ];
 
     return (
-        <div className="glass rounded-2xl border-white/15 p-3 flex flex-col gap-2.5 shadow-2xl bg-black/85 backdrop-blur-xl resize overflow-auto min-w-[280px] min-h-[160px] max-w-[95vw] relative group">
-            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 px-0.5 shrink-0">
-                <span className="text-[11px] font-mono font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    LIVE CALL ({tiles.length})
-                </span>
-                <span className="text-[9px] font-mono text-white/30 group-hover:text-white/60 transition-colors">
-                    ↘ Drag corner to resize
-                </span>
-            </div>
+        <>
+            {/* Header Status Button */}
+            <button
+                onClick={call.leaveCall}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-red-500/90 hover:bg-red-500 text-white rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 transition-all cursor-pointer shadow-sm shrink-0"
+                title="Leave Voice/Video Call"
+            >
+                <PhoneOff size={13} />
+                <span>In Call ({tiles.length})</span>
+            </button>
 
-            <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1 flex-1 min-h-0">
-                {tiles.map(t => (
-                    <VideoTile key={t.clientId} peer={t} self={t.self} />
-                ))}
-            </div>
+            {/* Standalone Floating Picture-in-Picture Call Card */}
+            <div className="fixed z-[100] top-16 right-4 sm:right-6 glass rounded-2xl border-white/20 p-3 flex flex-col gap-2.5 shadow-[0_25px_60px_rgba(0,0,0,0.9)] bg-black/90 backdrop-blur-2xl resize overflow-auto min-w-[280px] min-h-[160px] max-w-[95vw] max-h-[80vh] group">
+                <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 px-0.5 shrink-0">
+                    <span className="text-[11px] font-mono font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        PICTURE-IN-PICTURE CALL ({tiles.length})
+                    </span>
+                    <span className="text-[9px] font-mono text-white/40 group-hover:text-white/80 transition-colors">
+                        ↘ Drag corner to resize
+                    </span>
+                </div>
 
-            <div className="flex items-center justify-center gap-2 pt-1.5 border-t border-white/10 shrink-0">
-                <CtrlButton on={call.micOn} onClick={call.toggleMic}
-                    onIcon={<Mic size={15} />} offIcon={<MicOff size={15} />} label="Mic" />
-                <CtrlButton on={call.camOn} onClick={call.toggleCam}
-                    onIcon={<Video size={15} />} offIcon={<VideoOff size={15} />} label="Camera" />
-                <CtrlButton on={call.screenOn} onClick={call.toggleScreen}
-                    onIcon={<MonitorUp size={15} />} offIcon={<MonitorX size={15} />} label="Share" accent />
-                <button
-                    onClick={call.leaveCall}
-                    className="flex items-center gap-1 bg-red-500/90 hover:bg-red-500 text-white rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer"
-                    title="Leave call"
-                >
-                    <PhoneOff size={14} /> <span>Leave</span>
-                </button>
-            </div>
+                <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden pb-1 flex-1 min-h-0">
+                    {tiles.map(t => (
+                        <VideoTile key={t.clientId} peer={t} self={t.self} />
+                    ))}
+                </div>
 
-            {call.error && <p className="text-[11px] text-red-300 text-center shrink-0">{call.error}</p>}
-        </div>
+                <div className="flex items-center justify-center gap-2 pt-1.5 border-t border-white/10 shrink-0">
+                    <CtrlButton on={call.micOn} onClick={call.toggleMic}
+                        onIcon={<Mic size={15} />} offIcon={<MicOff size={15} />} label="Mic" />
+                    <CtrlButton on={call.camOn} onClick={call.toggleCam}
+                        onIcon={<Video size={15} />} offIcon={<VideoOff size={15} />} label="Camera" />
+                    <CtrlButton on={call.screenOn} onClick={call.toggleScreen}
+                        onIcon={<MonitorUp size={15} />} offIcon={<MonitorX size={15} />} label="Share" accent />
+                    <button
+                        onClick={call.leaveCall}
+                        className="flex items-center gap-1 bg-red-500/90 hover:bg-red-500 text-white rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer"
+                        title="Leave call"
+                    >
+                        <PhoneOff size={14} /> <span>Leave</span>
+                    </button>
+                </div>
+
+                {call.error && <p className="text-[11px] text-red-300 text-center shrink-0">{call.error}</p>}
+            </div>
+        </>
     );
 }
 
