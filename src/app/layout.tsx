@@ -17,6 +17,11 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "JamRoom — Synchronized Cyber Audio Rooms",
   description: "Synchronized music rooms with friends: import Spotify playlists, YouTube tracks, chat, and vibe in zero-latency sync.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

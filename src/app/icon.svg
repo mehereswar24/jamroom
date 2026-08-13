@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <radialGradient id="disc-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#a1a1aa"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark Background Base -->
+  <rect width="512" height="512" rx="128" fill="#050505"/>
+
+  <!-- Outer Glow Circle -->
+  <circle cx="256" cy="256" r="230" fill="url(#disc-glow)"/>
+
+  <!-- Vinyl Disc Outer Ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="url(#ring-grad)" stroke-width="12" opacity="0.9"/>
+  
+  <!-- Grooves -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="8 8" opacity="0.3"/>
+  <circle cx="256" cy="256" r="130" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.4"/>
+  <circle cx="256" cy="256" r="100" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="12 6" opacity="0.3"/>
+
+  <!-- Center Label Badge -->
+  <circle cx="256" cy="256" r="75" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="24" fill="#050505"/>
+
+  <!-- Soundwave Bars over Center -->
+  <g fill="#050505">
+    <rect x="216" y="240" width="8" height="32" rx="4"/>
+    <rect x="232" y="226" width="8" height="60" rx="4"/>
+    <rect x="248" y="210" width="8" height="92" rx="4"/>
+    <rect x="264" y="220" width="8" height="72" rx="4"/>
+    <rect x="280" y="234" width="8" height="44" rx="4"/>
+  </g>
+</svg>
