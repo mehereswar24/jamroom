@@ -91,7 +91,19 @@ export function useRoomConnection(roomCode: string, nickname: string, clientId: 
 
         sub(EV.playbackSync, (p: { queueItemId: number | null; videoId: string | null; mediaUrl: string | null; basePositionMs: number; baseServerTime: number; isPlaying: boolean }) =>
             st.setPlayback({ queueItemId: p.queueItemId, videoId: p.videoId, mediaUrl: p.mediaUrl ?? null, basePositionMs: p.basePositionMs, baseServerTime: p.baseServerTime, isPlaying: p.isPlaying }));
-        sub(EV.queueUpdated, (p: { queue: never[] }) => st.setQueue(p.queue));
+        // The queue is too big for Ably; the ping just tells us to re-pull it
+        // over HTTP. Debounce so a burst of import updates coalesces into one fetch.
+        let queueFetchTimer: ReturnType<typeof setTimeout> | null = null;
+        const pullQueue = () => {
+            if (queueFetchTimer) clearTimeout(queueFetchTimer);
+            queueFetchTimer = setTimeout(async () => {
+                try {
+                    const j = await fetch(`/api/rooms/${roomCode}/queue`).then(r => r.json());
+                    if (!disposed && j.ok) useRoomStore.getState().setQueue(j.queue);
+                } catch { /* ignore */ }
+            }, 300);
+        };
+        sub(EV.queueUpdated, () => pullQueue());
         sub(EV.voteSkip, (p: { votes: number; needed: number; voters: string[] }) => st.setVoteSkip(p));
         sub(EV.chatMessage, (p: { message: never }) => st.addMessage(p.message));
         sub(EV.notice, (p: { text: string; kind: 'info' | 'warn' | 'error' }) => {

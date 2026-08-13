@@ -15,8 +15,11 @@ export async function publishPlayback(code: string, playback: PlaybackState, rea
     await publish(code, EV.playbackSync, { ...playback, reason });
 }
 
+// The queue can be hundreds of tracks (>200KB) — far over Ably's 64KB per-
+// message limit. So we broadcast only a tiny "changed" ping; clients pull the
+// full queue over HTTP (GET /api/rooms/[code]/queue), which has no such cap.
 export async function publishQueue(code: string): Promise<void> {
-    await publish(code, EV.queueUpdated, { queue: await store.listQueue(code) });
+    await publish(code, EV.queueUpdated, { v: Date.now() });
 }
 
 export async function voteSkipState(code: string): Promise<VoteSkipState> {
