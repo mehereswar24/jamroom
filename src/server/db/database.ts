@@ -6,9 +6,22 @@ let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
     if (db) return db;
-    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'jamroom.db');
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-    db = new Database(dbPath);
+    try {
+        let dbPath = process.env.DATABASE_PATH;
+        if (!dbPath) {
+            // In serverless / Vercel environments, write to /tmp or use memory
+            if (process.env.VERCEL || (process.env.NODE_ENV === 'production' && !fs.existsSync(path.join(process.cwd(), 'data')))) {
+                dbPath = path.join('/tmp', 'jamroom.db');
+            } else {
+                dbPath = path.join(process.cwd(), 'data', 'jamroom.db');
+            }
+        }
+        fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+        db = new Database(dbPath);
+    } catch {
+        console.warn('[db] File database un-writable or serverless environment detected — falling back to in-memory SQLite');
+        db = new Database(':memory:');
+    }
     db.pragma('journal_mode = WAL');
     db.pragma('busy_timeout = 5000');
     db.pragma('foreign_keys = ON');
@@ -86,6 +99,13 @@ function migrate(d: Database.Database): void {
                 status TEXT NOT NULL DEFAULT 'running',
                 created_at INTEGER NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS playlist_cache (
+                playlist_id TEXT PRIMARY KEY,
+                playlist_name TEXT,
+                tracks_json TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
         `);
         d.pragma('user_version = 1');
         console.log('[db] schema v1 applied');
@@ -96,7 +116,15 @@ function migrate(d: Database.Database): void {
         if (!cols.some(c => c.name === 'media_url')) {
             d.exec('ALTER TABLE queue_items ADD COLUMN media_url TEXT');
         }
+        d.exec(`
+            CREATE TABLE IF NOT EXISTS playlist_cache (
+                playlist_id TEXT PRIMARY KEY,
+                playlist_name TEXT,
+                tracks_json TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+        `);
         d.pragma('user_version = 2');
-        console.log('[db] schema v2 applied (media_url)');
+        console.log('[db] schema v2 applied (media_url & playlist_cache)');
     }
 }

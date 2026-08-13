@@ -217,3 +217,31 @@ export function updateImport(id: string, patch: {
     vals.push(id);
     getDb().prepare(`UPDATE imports SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 }
+
+export function getPlaylistCache(playlistId: string): { playlistName: string; tracks: Array<{ name: string; artist: string; durationMs: number; albumArt?: string | null; spotifyTrackId?: string }> } | null {
+    try {
+        const row = getDb().prepare('SELECT playlist_name, tracks_json FROM playlist_cache WHERE playlist_id = ?').get(playlistId) as { playlist_name: string; tracks_json: string } | undefined;
+        if (!row) return null;
+        return {
+            playlistName: row.playlist_name || 'Cached Playlist',
+            tracks: JSON.parse(row.tracks_json)
+        };
+    } catch {
+        return null;
+    }
+}
+
+export function setPlaylistCache(playlistId: string, playlistName: string, tracks: Array<{ name: string; artist: string; durationMs: number; albumArt?: string | null; spotifyTrackId?: string }>): void {
+    try {
+        getDb().prepare(`
+            INSERT INTO playlist_cache (playlist_id, playlist_name, tracks_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(playlist_id) DO UPDATE SET
+                playlist_name = excluded.playlist_name,
+                tracks_json = excluded.tracks_json,
+                updated_at = excluded.updated_at
+        `).run(playlistId, playlistName, JSON.stringify(tracks), Date.now());
+    } catch (err) {
+        console.warn('[db] setPlaylistCache failed:', err);
+    }
+}

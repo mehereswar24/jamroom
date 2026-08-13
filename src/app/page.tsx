@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Dices, Disc3, Flame, KeyRound, ListMusic, MessageCircle, Radio, Sparkles, Users, Zap } from 'lucide-react';
 import { useLocalIdentity } from '@/hooks/useLocalIdentity';
 import { normalizeRoomCode } from '@/lib/ids';
@@ -31,17 +31,37 @@ export default function Landing() {
         return true;
     };
 
+    const [recentRooms, setRecentRooms] = useState<Array<{ code: string; name: string }>>([]);
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('jamroom_recent_rooms');
+            if (raw) setRecentRooms(JSON.parse(raw));
+        } catch {}
+    }, []);
+
+    const saveRecentRoom = (code: string, roomName: string) => {
+        try {
+            const existing = recentRooms.filter(r => r.code !== code);
+            const updated = [{ code, name: roomName }, ...existing].slice(0, 5);
+            setRecentRooms(updated);
+            localStorage.setItem('jamroom_recent_rooms', JSON.stringify(updated));
+        } catch {}
+    };
+
     const createRoom = async () => {
         if (needName()) return;
         setBusy('create'); setError(null);
         try {
+            const roomName = `${nickname.trim()}'s Cyber Studio`;
             const res = await fetch('/api/rooms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clientId, name: `${nickname.trim()}'s Cyber Studio` })
+                body: JSON.stringify({ clientId, name: roomName })
             });
             const j = await res.json();
             if (!j.ok) throw new Error(j.error || 'Could not create room');
+            saveRecentRoom(j.code, roomName);
             router.push(`/room/${j.code}`);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not create room');
@@ -49,14 +69,17 @@ export default function Landing() {
         }
     };
 
-    const joinRoom = async () => {
+    const joinRoom = async (codeToJoin?: string) => {
         if (needName()) return;
-        const code = normalizeRoomCode(joinCode);
+        const code = normalizeRoomCode(codeToJoin || joinCode);
         if (code.length < 4) { setError('Enter a valid 4+ character room code'); return; }
         setBusy('join'); setError(null);
         try {
             const res = await fetch(`/api/rooms/${code}`);
             if (!res.ok) throw new Error('Room not found — check the code');
+            const data = await res.json().catch(() => ({}));
+            const name = data.name || `Room ${code}`;
+            saveRecentRoom(code, name);
             router.push(`/room/${code}`);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Join failed');
@@ -200,7 +223,7 @@ export default function Landing() {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={joinRoom}
+                                        onClick={() => joinRoom()}
                                         disabled={busy !== null}
                                         className="w-full neon-btn-primary py-3 rounded-xl font-heading font-bold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-1.5 cursor-pointer"
                                     >
@@ -215,6 +238,27 @@ export default function Landing() {
                             <div className="mt-3 p-2.5 rounded-xl bg-white/5 border border-white/20 text-white text-[11px] font-semibold flex items-center gap-2">
                                 <Flame size={14} className="shrink-0 text-white" />
                                 <span>{error}</span>
+                            </div>
+                        )}
+
+                        {recentRooms.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-white/10">
+                                <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-white/50 block mb-1.5">
+                                    Recent Rooms History
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {recentRooms.map(r => (
+                                        <button
+                                            key={r.code}
+                                            onClick={() => joinRoom(r.code)}
+                                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/15 border border-white/15 text-[11px] font-mono text-white/80 flex items-center gap-1.5 transition-all cursor-pointer"
+                                            title={`Rejoin ${r.name}`}
+                                        >
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                            <span>{r.code}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>

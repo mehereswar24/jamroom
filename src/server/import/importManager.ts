@@ -50,13 +50,22 @@ export async function startImport(args: {
 
     if (args.clientTracks && args.clientTracks.length > 0) {
         tracksToImport = args.clientTracks;
+        repos.setPlaylistCache(playlistId, playlistName, tracksToImport);
     } else {
-        try {
-            const fetched = await fetchPlaylist(playlistId);
-            playlistName = fetched.name;
-            tracksToImport = fetched.tracks;
-        } catch (err: unknown) {
-            return { ok: false, error: err instanceof Error ? err.message : 'Spotify fetch failed' };
+        const cached = repos.getPlaylistCache(playlistId);
+        if (cached && cached.tracks.length > 0) {
+            playlistName = cached.playlistName;
+            tracksToImport = cached.tracks;
+            args.onSystemMessage(`Loaded “${playlistName}” (${tracksToImport.length} tracks) instantly from session cache!`);
+        } else {
+            try {
+                const fetched = await fetchPlaylist(playlistId);
+                playlistName = fetched.name;
+                tracksToImport = fetched.tracks;
+                repos.setPlaylistCache(playlistId, playlistName, tracksToImport);
+            } catch (err: unknown) {
+                return { ok: false, error: err instanceof Error ? err.message : 'Spotify fetch failed' };
+            }
         }
     }
 

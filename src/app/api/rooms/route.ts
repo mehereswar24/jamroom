@@ -12,11 +12,16 @@ export async function POST(req: Request) {
         if (!hostClientId) return NextResponse.json({ ok: false, error: 'Missing clientId' }, { status: 400 });
 
         let code = newRoomCode();
-        while (getRoom(code)) code = newRoomCode();
+        let attempts = 0;
+        while (attempts < 10 && getRoom(code)) {
+            code = newRoomCode();
+            attempts++;
+        }
         createRoom(code, name, hostClientId);
         return NextResponse.json({ ok: true, code });
     } catch (err) {
-        console.error('[api/rooms] create failed:', err);
-        return NextResponse.json({ ok: false, error: 'Could not create room' }, { status: 500 });
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error('[api/rooms] create failed:', errorMsg);
+        return NextResponse.json({ ok: false, error: `Could not create room: ${errorMsg}` }, { status: 500 });
     }
 }
