@@ -9,7 +9,7 @@
  */
 
 import * as Ably from 'ably';
-import { roomChannel } from '@/lib/channels';
+import { roomChannel, gameChannel } from '@/lib/channels';
 
 let client: Ably.Realtime | null = null;
 
@@ -28,6 +28,11 @@ export function getAbly(clientId: string): Ably.Realtime {
 
 export function getRoomChannel(clientId: string, code: string): Ably.RealtimeChannel {
     return getAbly(clientId).channels.get(roomChannel(code));
+}
+
+/** Dedicated high-frequency channel for drawing strokes. */
+export function getGameChannel(clientId: string, code: string): Ably.RealtimeChannel {
+    return getAbly(clientId).channels.get(gameChannel(code));
 }
 
 export function closeAbly(): void {

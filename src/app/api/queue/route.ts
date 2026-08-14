@@ -106,6 +106,6 @@ export async function POST(req: Request) {
         }
     } catch (err) {
         console.error('[api/queue] failed:', err);
-        return NextResponse.json({ ok: false, error: 'Queue action failed' }, { status: 500 });
+        return NextResponse.json({ ok: false, error: `Queue action failed: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 }

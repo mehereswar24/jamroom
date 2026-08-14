@@ -149,8 +149,10 @@ export default function PlayerPane() {
                 </div>
             </div>
 
-            {/* Main Video/Audio Player Shell */}
-            <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] bg-black/80 border border-white/10 shadow-2xl">
+            {/* Main Video/Audio Player Shell. max-w caps width to the 16:9 of the
+                height limit (54vh ≈ 96vh wide) so the stage stays 16:9 and
+                centered instead of stretching short-and-wide on big screens. */}
+            <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] w-full max-w-[96vh] mx-auto bg-black/80 border border-white/10 shadow-2xl">
                 <div ref={containerRef} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
 
                 {!playback.videoId && !playback.mediaUrl && (

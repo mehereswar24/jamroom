@@ -59,6 +59,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, importId, playlistName, ids, total: ids.length });
     } catch (err) {
         console.error('[api/import/start] failed:', err);
-        return NextResponse.json({ ok: false, error: 'Import failed to start' }, { status: 500 });
+        return NextResponse.json({ ok: false, error: `Import failed: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 }

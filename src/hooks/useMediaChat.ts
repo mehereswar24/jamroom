@@ -252,11 +252,32 @@ export function useMediaChat(selfClientId: string, roomCode: string): MediaChat 
 
     /* ── local media helpers ── */
 
+    // replaceTrack does NOT trigger renegotiation, and a transceiver that was
+    // negotiated with no track sits at direction "recvonly" — so a camera/screen
+    // turned on later never actually flows to peers until we renegotiate. Force
+    // an offer (perfect-negotiation-safe) whenever we add/replace a sending track.
+    const renegotiate = async (peerId: string, link: PeerLink) => {
+        try {
+            if (link.makingOffer || link.pc.signalingState !== 'stable') return;
+            link.makingOffer = true;
+            await link.pc.setLocalDescription();
+            sendSignal(peerId, { description: link.pc.localDescription!.toJSON() as RtcSignalData['description'] });
+        } catch (err) {
+            console.error('[rtc] renegotiate error', err);
+        } finally {
+            link.makingOffer = false;
+        }
+    };
+
     const setVideoOnLinks = (track: MediaStreamTrack | null) => {
-        for (const link of links.current.values()) void link.videoSender.replaceTrack(track);
+        for (const [peerId, link] of links.current.entries()) {
+            void link.videoSender.replaceTrack(track).then(() => renegotiate(peerId, link));
+        }
     };
     const setAudioOnLinks = (track: MediaStreamTrack | null) => {
-        for (const link of links.current.values()) void link.audioSender.replaceTrack(track);
+        for (const [peerId, link] of links.current.entries()) {
+            void link.audioSender.replaceTrack(track).then(() => renegotiate(peerId, link));
+        }
     };
 
     const rebuildLocalStream = () => {

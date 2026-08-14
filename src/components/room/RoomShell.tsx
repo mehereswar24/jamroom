@@ -2,16 +2,19 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Copy, Crown, Disc3, ListMusic, MessageCircle, Settings, Users } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Crown, Disc3, Gamepad2, ListMusic, MessageCircle, Settings, Users } from 'lucide-react';
 import { useLocalIdentity } from '@/hooks/useLocalIdentity';
 import { useRoomConnection } from '@/hooks/useRoomConnection';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { api } from '@/hooks/api';
 import { useMediaChat } from '@/hooks/useMediaChat';
+import { useGame } from '@/hooks/useGame';
+import { useBoardGame } from '@/hooks/useBoardGame';
 import PlayerPane from './PlayerPane';
 import QueuePanel from './QueuePanel';
 import ChatPanel from './ChatPanel';
 import CallBar from './CallBar';
+import GamesPanel from './GamesPanel';
 
 export default function RoomShell({ roomCode }: { roomCode: string }) {
     const { nickname, clientId, setNickname } = useLocalIdentity();
@@ -69,10 +72,13 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
     const selfClientId = useRoomStore(s => s.selfClientId);
     const guestControls = useRoomStore(s => s.guestControls);
     const notice = useRoomStore(s => s.notice);
-    const [tab, setTab] = useState<'queue' | 'chat'>('queue');
+    const [tab, setTab] = useState<'queue' | 'chat' | 'games'>('queue');
     const [copied, setCopied] = useState(false);
     const [hostMenuOpen, setHostMenuOpen] = useState(false);
     const call = useMediaChat(selfClientId, roomCode);
+    const game = useGame(roomCode, selfClientId);
+    const boardGame = useBoardGame(roomCode, selfClientId);
+    const gameActive = (!!game.state && game.state.status !== 'idle' && game.state.status !== 'gameEnd') || !!boardGame.board;
 
     const isHost = selfClientId === hostClientId;
 
@@ -208,30 +214,38 @@ function ConnectedRoom({ roomCode, nickname, clientId }: { roomCode: string; nic
 
 
 
-            {/* Room Main Grid: Player Pane + Side Panel (Queue & Chat) */}
-            <div className="flex-1 grid lg:grid-cols-[1fr_390px] gap-4 min-h-0">
+            {/* Room Main Grid: Player Pane + Side Panel (Queue & Chat).
+                [&>*]:min-w-0 lets both columns shrink below their content's
+                intrinsic width — without it the 1fr video column overflows,
+                stretching the video and pushing the chat panel out of view. */}
+            <div className="flex-1 grid lg:grid-cols-[1fr_390px] gap-4 min-h-0 [&>*]:min-w-0">
                 <PlayerPane />
 
-                <div className="flex flex-col glass rounded-3xl border-white/10 overflow-hidden min-h-[440px] lg:min-h-0 shadow-2xl">
-                    {/* Queue / Chat Tabs */}
+                <div className="flex flex-col glass rounded-3xl border-white/10 overflow-hidden min-w-0 min-h-[440px] lg:min-h-0 shadow-2xl">
+                    {/* Queue / Chat / Games Tabs */}
                     <div className="flex border-b border-white/10 bg-black/30 p-1">
-                        {([['queue', 'Queue', ListMusic], ['chat', 'Chat', MessageCircle]] as const).map(([key, label, Icon]) => (
+                        {([['queue', 'Queue', ListMusic], ['chat', 'Chat', MessageCircle], ['games', 'Games', Gamepad2]] as const).map(([key, label, Icon]) => (
                             <button
                                 key={key}
                                 onClick={() => setTab(key)}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                                className={`relative flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                                     tab === key
                                         ? 'text-white bg-white/10 border border-white/10 shadow-sm'
                                         : 'text-white/40 hover:text-white/80'
                                 }`}
                             >
                                 <Icon size={16} /> <span>{label}</span>
+                                {key === 'games' && gameActive && tab !== 'games' && (
+                                    <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-accent animate-pulse" />
+                                )}
                             </button>
                         ))}
                     </div>
 
                     <div className="flex-1 min-h-0 bg-black/20">
-                        {tab === 'queue' ? <QueuePanel /> : <ChatPanel />}
+                        {tab === 'queue' ? <QueuePanel />
+                            : tab === 'chat' ? <ChatPanel />
+                            : <GamesPanel game={game} board={boardGame} roomCode={roomCode} clientId={selfClientId} />}
                     </div>
                 </div>
             </div>

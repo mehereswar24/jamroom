@@ -54,20 +54,20 @@ export default function ChatPanel() {
 
     return (
         <div className="h-full flex flex-col">
-            <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
+            <div ref={listRef} className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 space-y-2.5">
                 {messages.map(m => m.type === 'system' ? (
-                    <p key={m.id} className="text-center text-[11px] text-white/35">{m.body}</p>
+                    <p key={m.id} className="text-center text-[11px] text-white/35 break-words">{m.body}</p>
                 ) : (
-                    <div key={m.id} className={`flex gap-2.5 ${m.clientId === selfClientId ? 'flex-row-reverse' : ''}`}>
+                    <div key={m.id} className={`flex gap-2.5 min-w-0 ${m.clientId === selfClientId ? 'flex-row-reverse' : ''}`}>
                         <div
                             className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold mt-0.5"
                             style={{ backgroundColor: m.clientId ? avatarColorFor(m.clientId) : '#666' }}
                         >
                             {m.nickname.slice(0, 1).toUpperCase()}
                         </div>
-                        <div className={`max-w-[75%] ${m.clientId === selfClientId ? 'text-right' : ''}`}>
-                            <p className="text-[11px] text-white/40 mb-0.5">{m.nickname}</p>
-                            <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm break-words text-left ${
+                        <div className={`min-w-0 max-w-[75%] ${m.clientId === selfClientId ? 'text-right' : ''}`}>
+                            <p className="text-[11px] text-white/40 mb-0.5 truncate">{m.nickname}</p>
+                            <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm break-words [overflow-wrap:anywhere] text-left ${
                                 m.clientId === selfClientId ? 'bg-white text-black font-semibold shadow' : 'bg-white/10 text-white border border-white/10'
                             }`}>
                                 {m.body}

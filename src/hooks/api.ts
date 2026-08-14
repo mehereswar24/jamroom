@@ -46,6 +46,10 @@ export const api = {
     room: (action: string, extra: Record<string, unknown> = {}) =>
         post('/api/room', { code: roomCode, action, ...extra }),
     chat: (body: string) => post('/api/chat', { code: roomCode, body }),
+    game: <T = object>(action: string, extra: Record<string, unknown> = {}) =>
+        post<T>('/api/game', { code: roomCode, action, ...extra }),
+    board: <T = object>(action: string, extra: Record<string, unknown> = {}) =>
+        post<T>('/api/board', { code: roomCode, action, ...extra }),
     importStart: <T = object>(body: Record<string, unknown>) =>
         post<T>('/api/import/start', { code: roomCode, ...body }),
     importBatch: <T = object>(extra: Record<string, unknown>) =>
