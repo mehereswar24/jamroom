@@ -1,6 +1,7 @@
 /** Shared turn-based board-game framework (client + server). */
 
-export type BoardGameId = 'ttt' | 'connect4' | 'rps' | 'snakes' | 'ludo';
+export type BoardGameId = 'ttt' | 'connect4' | 'rps' | 'snakes' | 'ludo'
+    | 'gomoku' | 'reversi' | 'dots' | 'memory' | 'hangman';
 
 export interface Seat {
     clientId: string;
@@ -44,6 +45,8 @@ export interface GameDef<S = unknown> {
     startPatch(board: BoardState<S>): Partial<BoardState<S>>;
     /** Validate + apply an action for `seat`; return a patch to merge. */
     reduce(board: BoardState<S>, seat: number, action: Record<string, unknown>): MoveResult<S>;
+    /** Optional: strip secrets (e.g. a hidden word) before broadcasting/snapshotting. */
+    redact?(board: BoardState<S>): BoardState<S>;
 }
 
 export const rng6 = () => 1 + Math.floor(Math.random() * 6);

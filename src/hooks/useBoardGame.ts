@@ -26,7 +26,7 @@ export function useBoardGame(roomCode: string, clientId: string): BoardHook {
 
     useEffect(() => {
         if (!roomCode || !clientId) return;
-        const channel = getRoomChannel(clientId, roomCode);
+        const channel = getRoomChannel(roomCode);
         let disposed = false;
         const onState = (msg: Ably.Message) => setBoard((msg.data as BoardState | null) ?? null);
         channel.subscribe(EV.boardState, onState);

@@ -21,7 +21,7 @@ export function useRoomConnection(roomCode: string, nickname: string, clientId: 
         if (!roomCode || !nickname || !clientId) return;
         setApiRoom(roomCode);
         const st = useRoomStore.getState();
-        const channel = getRoomChannel(clientId, roomCode);
+        const channel = getRoomChannel(roomCode);
         const joinedAt = Date.now();
         let disposed = false;
         let currentHost = '';

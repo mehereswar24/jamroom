@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Ably from 'ably';
-import { getAbly } from './realtime';
+import { getCallChannel as getRoomCallChannel } from './realtime';
 import { getSavedNickname } from './useLocalIdentity';
 import type { RtcPeer, RtcSignalData } from '@/lib/types';
 
@@ -93,7 +93,7 @@ export function useMediaChat(selfClientId: string, roomCode: string): MediaChat 
     const callChannelRef = useRef<Ably.RealtimeChannel | null>(null);
     const getCallChannel = useCallback((): Ably.RealtimeChannel | null => {
         if (!callChannelRef.current && selfClientId && roomCode) {
-            callChannelRef.current = getAbly(selfClientId).channels.get(`room:${roomCode}:call`);
+            callChannelRef.current = getRoomCallChannel(roomCode);
         }
         return callChannelRef.current;
     }, [selfClientId, roomCode]);

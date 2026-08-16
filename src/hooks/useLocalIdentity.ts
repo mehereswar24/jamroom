@@ -1,19 +1,19 @@
 'use client';
 
+/**
+ * Local identity = the nickname only.
+ *
+ * clientId used to be a localStorage UUID that the client sent with every
+ * request, and every server-side permission check compared against it. Since
+ * the host's id is broadcast to the whole room, any guest could replay it and
+ * take over. Identity is now minted and signed by the server (see
+ * server/auth/identity.ts) and reaches the client only via the Ably token.
+ */
+
 import { useEffect, useState } from 'react';
+import { currentClientId, waitForIdentity } from './realtime';
 
 const NICK_KEY = 'jamroom:nickname';
-const CLIENT_KEY = 'jamroom:clientId';
-
-export function getClientId(): string {
-    if (typeof window === 'undefined') return '';
-    let id = localStorage.getItem(CLIENT_KEY);
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem(CLIENT_KEY, id);
-    }
-    return id;
-}
 
 export function getSavedNickname(): string {
     if (typeof window === 'undefined') return '';
@@ -26,13 +26,30 @@ export function saveNickname(nick: string): void {
 
 export function useLocalIdentity() {
     const [nickname, setNickname] = useState('');
-    const [clientId, setClientId] = useState('');
     useEffect(() => {
         setNickname(getSavedNickname());
-        setClientId(getClientId());
     }, []);
     return {
-        nickname, clientId,
+        nickname,
         setNickname: (n: string) => { setNickname(n); saveNickname(n); }
     };
+}
+
+/**
+ * The server-assigned clientId for the room we're connected to.
+ * Empty until the Ably connection has authenticated.
+ */
+export function useRoomIdentity(roomCode: string) {
+    const [clientId, setClientId] = useState(currentClientId());
+
+    useEffect(() => {
+        if (!roomCode) return;
+        let cancelled = false;
+        void waitForIdentity(roomCode).then(id => {
+            if (!cancelled) setClientId(id);
+        });
+        return () => { cancelled = true; };
+    }, [roomCode]);
+
+    return clientId;
 }

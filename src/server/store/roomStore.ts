@@ -19,6 +19,7 @@ const K = {
     seq: (c: string) => `jr:${c}:seq`,
     messages: (c: string) => `jr:${c}:messages`,
     votes: (c: string) => `jr:${c}:votes`,
+    hostAbsent: (c: string) => `jr:${c}:hostAbsent`,
 };
 
 export interface RoomMeta {
@@ -74,6 +75,21 @@ export async function setHost(code: string, hostClientId: string): Promise<RoomM
     return meta;
 }
 
+/** Record when the host was first seen absent; returns that timestamp.
+ *  Used to enforce a grace period before another member can claim the room. */
+export async function markHostAbsent(code: string): Promise<number> {
+    const r = getRedis();
+    const existing = await r.get<number>(K.hostAbsent(code));
+    if (typeof existing === 'number') return existing;
+    const now = Date.now();
+    await r.set(K.hostAbsent(code), now, { ex: ROOM_TTL_SECONDS });
+    return now;
+}
+
+export async function clearHostAbsence(code: string): Promise<void> {
+    await getRedis().del(K.hostAbsent(code));
+}
+
 export async function setGuestControls(code: string, enabled: boolean): Promise<void> {
     const meta = await getMeta(code);
     if (!meta) return;
@@ -109,27 +125,27 @@ export async function getItem(code: string, id: number): Promise<QueueItem | und
     return (await listQueue(code)).find(q => q.id === id);
 }
 
-export async function addYouTubeItem(code: string, v: VideoCandidate, addedBy: string): Promise<number> {
+export async function addYouTubeItem(code: string, v: VideoCandidate, addedBy: string, addedByClientId?: string): Promise<number> {
     const id = await nextId(code);
     const items = await listQueue(code);
     items.push({
         id, sortOrder: items.length, title: v.title, artist: v.channel,
         durationMs: v.durationMs, albumArtUrl: v.thumb, source: 'youtube',
         spotifyTrackId: null, youtubeVideoId: v.videoId, mediaUrl: null,
-        matchStatus: 'matched', matchScore: 1, addedBy, playedAt: null
+        matchStatus: 'matched', matchScore: 1, addedBy, addedByClientId, playedAt: null
     });
     await saveQueue(code, items);
     return id;
 }
 
-export async function addUrlItem(code: string, m: { url: string; title: string }, addedBy: string): Promise<number> {
+export async function addUrlItem(code: string, m: { url: string; title: string }, addedBy: string, addedByClientId?: string): Promise<number> {
     const id = await nextId(code);
     const items = await listQueue(code);
     items.push({
         id, sortOrder: items.length, title: m.title, artist: null,
         durationMs: 0, albumArtUrl: null, source: 'url',
         spotifyTrackId: null, youtubeVideoId: null, mediaUrl: m.url,
-        matchStatus: 'matched', matchScore: 1, addedBy, playedAt: null
+        matchStatus: 'matched', matchScore: 1, addedBy, addedByClientId, playedAt: null
     });
     await saveQueue(code, items);
     return id;
@@ -140,7 +156,7 @@ export interface SpotifyPlaceholder {
 }
 
 /** Bulk-insert import placeholders in one write. Returns the new item ids in order. */
-export async function addSpotifyPlaceholders(code: string, tracks: SpotifyPlaceholder[], addedBy: string): Promise<number[]> {
+export async function addSpotifyPlaceholders(code: string, tracks: SpotifyPlaceholder[], addedBy: string, addedByClientId?: string): Promise<number[]> {
     const start = await getRedis().incrby(K.seq(code), tracks.length);
     await getRedis().expire(K.seq(code), ROOM_TTL_SECONDS);
     const firstId = start - tracks.length + 1;
@@ -153,7 +169,7 @@ export async function addSpotifyPlaceholders(code: string, tracks: SpotifyPlaceh
             id, sortOrder: items.length, title: t.name, artist: t.artist,
             durationMs: t.durationMs, albumArtUrl: t.albumArt, source: 'spotify',
             spotifyTrackId: t.spotifyTrackId, youtubeVideoId: null, mediaUrl: null,
-            matchStatus: 'needs_review', matchScore: null, addedBy, playedAt: null
+            matchStatus: 'needs_review', matchScore: null, addedBy, addedByClientId, playedAt: null
         });
     });
     await saveQueue(code, items);
@@ -308,7 +324,10 @@ export async function playItem(code: string, id: number): Promise<PlaybackState 
 /* ── messages ── */
 
 export async function addMessage(code: string, m: { clientId: string | null; nickname: string; type: 'chat' | 'system'; body: string }): Promise<ChatMessage> {
-    const msg: ChatMessage = { id: Date.now() + Math.floor(Math.random() * 1000), ...m, createdAt: Date.now() };
+    // Monotonic per-room id from the same counter the queue uses. The previous
+    // `Date.now() + random(1000)` collided for two messages in the same
+    // millisecond, which broke React keys and reaction targeting.
+    const msg: ChatMessage = { id: await nextId(code), ...m, createdAt: Date.now() };
     const r = getRedis();
     await r.rpush(K.messages(code), JSON.stringify(msg));
     await r.ltrim(K.messages(code), -100, -1);

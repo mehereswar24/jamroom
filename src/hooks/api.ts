@@ -7,7 +7,7 @@
  * event does that for everyone, including the caller).
  */
 
-import { getClientId, getSavedNickname } from './useLocalIdentity';
+import { getSavedNickname } from './useLocalIdentity';
 import { getRoomChannel } from './realtime';
 
 interface Ack<T = object> { ok: boolean; error?: string; }
@@ -18,7 +18,10 @@ async function post<T = object>(path: string, body: Record<string, unknown>): Pr
         const res = await fetch(path, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clientId: getClientId(), nickname: getSavedNickname(), ...body }),
+            // No clientId: the server reads identity from the signed cookie.
+            // `credentials` keeps that cookie attached.
+            credentials: 'same-origin',
+            body: JSON.stringify({ nickname: getSavedNickname(), ...body }),
         });
         const j = await res.json().catch(() => ({ ok: false, error: 'Bad response' }));
         return j as Result<T>;
@@ -33,9 +36,8 @@ export function setApiRoom(code: string) { roomCode = code; }
 /** Publish an ephemeral event (typing, reaction, WebRTC signal) straight to the
  *  room's Ably channel — no server round-trip, no persistence. */
 export function publishEphemeral(event: string, data: Record<string, unknown>): void {
-    const cid = getClientId();
-    if (!roomCode || !cid) return;
-    try { void getRoomChannel(cid, roomCode).publish(event, data); } catch { /* ignore */ }
+    if (!roomCode) return;
+    try { void getRoomChannel(roomCode).publish(event, data); } catch { /* ignore */ }
 }
 
 export const api = {

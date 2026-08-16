@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import pLimit from 'p-limit';
-import { normalizeRoomCode } from '@/lib/ids';
 import { EV } from '@/lib/channels';
 import * as store from '@/server/store/roomStore';
 import { publish } from '@/server/realtime/publish';
 import { publishQueue, publishPlayback } from '@/server/actions';
 import { searchYouTube } from '@/server/youtube/search';
 import { MATCH_THRESHOLD, normalizeQuery, pickBestMatch } from '@/server/youtube/match';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,8 +18,14 @@ export const maxDuration = 60;
 // single batch (not per-track) to avoid O(n²) rewrites of the whole queue.
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, body } = auth;
+
+        // Chunks of 24 tracks; this budget covers a ~2000-track playlist per hour.
+        const limited = await rateLimit(`importBatch:${code}:${clientId}`, 100, 3600);
+        if (limited) return limited;
+
         const ids = ((body?.ids as number[]) ?? []).map(Number).slice(0, 24);
         const total = Number(body?.total) || 0;
         const doneBefore = Number(body?.doneBefore) || 0;

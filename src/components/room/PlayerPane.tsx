@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-    Disc3, ExternalLink, GripHorizontal, Headphones, Maximize, Maximize2, Minimize, Minimize2, Move, Pause, Pin, PinOff, Play, Repeat, Repeat1, SkipBack, SkipForward, ThumbsDown, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut
+    Activity, Disc3, ExternalLink, GripHorizontal, Headphones, Maximize, Maximize2, Minimize, Minimize2, Move, Pause, Pin, PinOff, Play, Repeat, Repeat1, SkipBack, SkipForward, ThumbsDown, Tv, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { api, publishEphemeral } from '@/hooks/api';
 import { EV } from '@/lib/channels';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { useSyncedPlayer } from '@/hooks/useSyncedPlayer';
 import { formatDuration } from '@/lib/ids';
+import WatchPartyTheater from './WatchPartyTheater';
+import VisualizerStudioModal from './VisualizerStudioModal';
 
 export default function PlayerPane() {
     const { containerRef, audioJoined, joinAudio, struggling, volume, setVolume } = useSyncedPlayer();
@@ -22,6 +24,10 @@ export default function PlayerPane() {
     const canControl = selfClientId === hostClientId || guestControls;
     const current = queue.find(q => q.id === playback.queueItemId) ?? null;
     const votedSkip = voteSkip.voters.includes(selfClientId);
+
+    /* Watch Party Stage Mode & Visualizer State */
+    const [stageMode, setStageMode] = useState<'music' | 'theater'>('music');
+    const [isVisualizerOpen, setIsVisualizerOpen] = useState(false);
 
     /* Floating & Draggable Card State */
     const [isFloating, setIsFloating] = useState(false);
@@ -130,13 +136,42 @@ export default function PlayerPane() {
 
     return (
         <div className="flex flex-col gap-3 min-h-0">
-            {/* Top Bar with Stage Title & Fullscreen Control */}
-            <div className="flex items-center justify-between gap-2 px-1">
-                <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-wider text-white/50">
-                    <Disc3 size={16} className="text-white/70 animate-spin-vinyl rounded-full" />
-                    <span>STAGE PLAYER</span>
+            {/* Top Bar with Stage Title, Watch Party Mode Toggle & Fullscreen Control */}
+            <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 p-1 rounded-2xl text-xs font-semibold">
+                        <button
+                            onClick={() => setStageMode('music')}
+                            className={`px-3 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                                stageMode === 'music' ? 'bg-white/15 text-white font-bold' : 'text-white/40 hover:text-white'
+                            }`}
+                        >
+                            <Disc3 size={14} className={stageMode === 'music' ? 'animate-spin-vinyl' : ''} />
+                            <span>Music Stage</span>
+                        </button>
+                        <button
+                            onClick={() => setStageMode('theater')}
+                            className={`px-3 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                                stageMode === 'theater' ? 'bg-emerald-500 text-slate-950 font-bold shadow-md' : 'text-white/40 hover:text-white'
+                            }`}
+                        >
+                            <Tv size={14} />
+                            <span>Watch Party</span>
+                        </button>
+                    </div>
                 </div>
+
                 <div className="flex items-center gap-1.5">
+                    {/* Audio Visualizer Launcher */}
+                    <button
+                        onClick={() => setIsVisualizerOpen(true)}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-500/20 to-emerald-500/20 hover:from-purple-500/30 hover:to-emerald-500/30 border border-white/15 text-emerald-300 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
+                        title="Launch Real-Time Audio Spectrum Visualizer"
+                    >
+                        <Activity size={14} />
+                        <span className="hidden sm:inline">Visualizer</span>
+                    </button>
+
                     {/* Fullscreen Toggle */}
                     <button
                         onClick={toggleFullscreen}
@@ -149,43 +184,47 @@ export default function PlayerPane() {
                 </div>
             </div>
 
-            {/* Main Video/Audio Player Shell. max-w caps width to the 16:9 of the
-                height limit (54vh ≈ 96vh wide) so the stage stays 16:9 and
-                centered instead of stretching short-and-wide on big screens. */}
-            <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] w-full max-w-[96vh] mx-auto bg-black/80 border border-white/10 shadow-2xl">
-                <div ref={containerRef} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
+            {/* Render Theater or Music Player */}
+            {stageMode === 'theater' ? (
+                <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] w-full bg-black/80 border border-white/10 shadow-2xl">
+                    <WatchPartyTheater canControl={canControl} selfNickname={selfClientId} />
+                </div>
+            ) : (
+                <div ref={stageWrapperRef} className="relative glass rounded-3xl overflow-hidden aspect-video max-h-[54vh] w-full bg-black/80 border border-white/10 shadow-2xl">
+                    <div ref={containerRef} className="absolute inset-0 [&_iframe]:w-full [&_iframe]:h-full" />
 
-                {!playback.videoId && !playback.mediaUrl && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/40 bg-gradient-to-b from-black/40 to-black/80">
-                        <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                            <Headphones size={32} className="text-accent" />
+                    {!playback.videoId && !playback.mediaUrl && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/40 bg-gradient-to-b from-black/40 to-black/80">
+                            <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                                <Headphones size={32} className="text-accent" />
+                            </div>
+                            <p className="text-sm font-medium text-white/70">Room queue is empty</p>
+                            <p className="text-xs text-white/40">Search a song or import a playlist in the queue panel →</p>
                         </div>
-                        <p className="text-sm font-medium text-white/70">Room queue is empty</p>
-                        <p className="text-xs text-white/40">Search a song or import a playlist in the queue panel →</p>
-                    </div>
-                )}
+                    )}
 
-                {!audioJoined && (playback.videoId || playback.mediaUrl) && (
-                    <button
-                        onClick={joinAudio}
-                        className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/80 backdrop-blur-md group transition-all cursor-pointer"
-                    >
-                        <span className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center group-hover:scale-110 shadow-[0_0_50px_rgba(255,255,255,0.4)] transition-all">
-                            <Volume2 size={34} className="text-black" />
-                        </span>
-                        <div className="text-center">
-                            <span className="text-xl font-bold font-heading uppercase block text-white tracking-wider">Tap to Join Audio Stream</span>
-                            <span className="text-xs text-white/60 mt-1 block">Drop in in zero-latency sync with room listeners</span>
+                    {!audioJoined && (playback.videoId || playback.mediaUrl) && (
+                        <button
+                            onClick={joinAudio}
+                            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/80 backdrop-blur-md group transition-all cursor-pointer"
+                        >
+                            <span className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center group-hover:scale-110 shadow-[0_0_50px_rgba(255,255,255,0.4)] transition-all">
+                                <Volume2 size={34} className="text-black" />
+                            </span>
+                            <div className="text-center">
+                                <span className="text-xl font-bold font-heading uppercase block text-white tracking-wider">Tap to Join Audio Stream</span>
+                                <span className="text-xs text-white/60 mt-1 block">Drop in in zero-latency sync with room listeners</span>
+                            </div>
+                        </button>
+                    )}
+
+                    {struggling && audioJoined && (
+                        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 text-xs bg-amber-500/20 border border-amber-500/40 rounded-full px-3.5 py-1.5 text-amber-300 backdrop-blur-md">
+                            <Wifi size={13} className="animate-pulse" /> Re-syncing playback stream…
                         </div>
-                    </button>
-                )}
-
-                {struggling && audioJoined && (
-                    <div className="absolute top-4 left-4 z-30 flex items-center gap-2 text-xs bg-amber-500/20 border border-amber-500/40 rounded-full px-3.5 py-1.5 text-amber-300 backdrop-blur-md">
-                        <Wifi size={13} className="animate-pulse" /> Re-syncing playback stream…
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
 
             {/* Now Playing Bar + Controls */}
             <div className="glass rounded-3xl p-3.5 sm:p-5 border-white/10">
@@ -361,6 +400,14 @@ export default function PlayerPane() {
                     </div>
                 </div>
             </div>
+
+            <VisualizerStudioModal
+                isOpen={isVisualizerOpen}
+                onClose={() => setIsVisualizerOpen(false)}
+                currentTitle={current?.title ?? 'JamRoom Audio Spectrum'}
+                currentArtist={current?.artist ?? 'Live Room Stream'}
+                isPlaying={playback.isPlaying}
+            />
         </div>
     );
 }

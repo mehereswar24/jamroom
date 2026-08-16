@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { normalizeRoomCode } from '@/lib/ids';
 import { EV } from '@/lib/channels';
 import * as store from '@/server/store/roomStore';
 import { publish } from '@/server/realtime/publish';
 import { publishQueue, publishPlayback, systemMessage } from '@/server/actions';
 import { fetchPlaylist, parsePlaylistId } from '@/server/spotify/spotifyClient';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,10 +17,16 @@ export const maxDuration = 60;
 // under the serverless time limit).
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, body } = auth;
+
+        // Each import fans out into a Spotify fetch plus hundreds of YouTube
+        // searches, so this is the most expensive route in the app.
+        const limited = await rateLimit(`import:${code}:${clientId}`, 5, 3600);
+        if (limited) return limited;
+
         const nickname = String(body?.nickname ?? 'Guest').slice(0, 24);
-        if (!(await store.roomExists(code))) return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
 
         // Two sources: a Spotify playlist URL, or a client-provided track list
         // (the "paste songs" tab).

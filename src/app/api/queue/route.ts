@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { normalizeRoomCode } from '@/lib/ids';
 import * as store from '@/server/store/roomStore';
 import { canControl, publishPlayback, publishQueue, publishVoteSkip, voteSkipState, systemMessage } from '@/server/actions';
 import { resolveUrl } from '@/server/media/resolveUrl';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 import type { VideoCandidate } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -10,13 +11,15 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
-        const clientId = String(body?.clientId ?? '').slice(0, 64);
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, meta, body } = auth;
+
+        const limited = await rateLimit(`queue:${code}:${clientId}`, 60, 60);
+        if (limited) return limited;
+
         const nickname = String(body?.nickname ?? 'Guest').slice(0, 24);
         const action = String(body?.action ?? '');
-        const meta = await store.getMeta(code);
-        if (!meta) return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
 
         const autoStartIfIdle = async () => {
             const m = await store.getMeta(code);
@@ -34,23 +37,32 @@ export async function POST(req: Request) {
                     videoId: String(v.videoId).slice(0, 20), title: String(v.title).slice(0, 200),
                     channel: String(v.channel ?? '').slice(0, 120), durationMs: Math.max(0, Number(v.durationMs) || 0),
                     thumb: v.thumb ? String(v.thumb).slice(0, 400) : null
-                }, nickname);
+                }, nickname, clientId);
                 await publishQueue(code); await autoStartIfIdle();
                 return NextResponse.json({ ok: true, queueItemId: id });
             }
             case 'addUrl': {
+                // Link resolution reaches out to arbitrary hosts, so it gets a
+                // tighter budget than the rest of the queue actions.
+                const urlLimited = await rateLimit(`addUrl:${code}:${clientId}`, 10, 60);
+                if (urlLimited) return urlLimited;
                 const r = await resolveUrl(String(body?.url ?? '').slice(0, 2000));
                 if (r.kind === 'error') return NextResponse.json({ ok: false, error: r.error }, { status: 400 });
                 let id: number, title: string;
-                if (r.kind === 'youtube') { id = await store.addYouTubeItem(code, r.video, nickname); title = r.video.title; }
-                else { id = await store.addUrlItem(code, { url: r.url, title: r.title.slice(0, 200) }, nickname); title = r.title; }
+                if (r.kind === 'youtube') { id = await store.addYouTubeItem(code, r.video, nickname, clientId); title = r.video.title; }
+                else { id = await store.addUrlItem(code, { url: r.url, title: r.title.slice(0, 200) }, nickname, clientId); title = r.title; }
                 await publishQueue(code); await autoStartIfIdle();
                 return NextResponse.json({ ok: true, queueItemId: id, title });
             }
             case 'remove': {
                 const item = await store.getItem(code, Number(body?.queueItemId));
                 if (!item) return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 });
-                if (!(canControl(meta, clientId) || item.addedBy === nickname))
+                // Compare verified identity, not the display nickname the
+                // client sends — anyone could previously claim to be the adder.
+                const isAdder = item.addedByClientId
+                    ? item.addedByClientId === clientId
+                    : false;
+                if (!(canControl(meta, clientId) || isAdder))
                     return NextResponse.json({ ok: false, error: 'Only the host or who added it can remove' }, { status: 403 });
                 if (meta.playback.queueItemId === item.id) {
                     const pb = await store.computeAdvance(code);
@@ -106,6 +118,6 @@ export async function POST(req: Request) {
         }
     } catch (err) {
         console.error('[api/queue] failed:', err);
-        return NextResponse.json({ ok: false, error: `Queue action failed: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+        return NextResponse.json({ ok: false, error: 'Queue action failed' }, { status: 500 });
     }
 }

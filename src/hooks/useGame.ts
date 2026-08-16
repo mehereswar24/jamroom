@@ -57,7 +57,7 @@ export function useGame(roomCode: string, clientId: string): GameHook {
     /* subscribe to game state + feed on the main channel */
     useEffect(() => {
         if (!roomCode || !clientId) return;
-        const channel = getRoomChannel(clientId, roomCode);
+        const channel = getRoomChannel(roomCode);
         let disposed = false;
 
         const onState = (msg: Ably.Message) => {

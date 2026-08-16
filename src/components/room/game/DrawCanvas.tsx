@@ -83,7 +83,7 @@ export default function DrawCanvas({ roomCode, clientId, canDraw }: {
     /* ── realtime wiring ── */
     useEffect(() => {
         if (!roomCode || !clientId) return;
-        const ch = getGameChannel(clientId, roomCode);
+        const ch = getGameChannel(roomCode);
 
         const onStroke = (m: Ably.Message) => {
             const s = m.data as StrokeMsg;
@@ -123,7 +123,7 @@ export default function DrawCanvas({ roomCode, clientId, canDraw }: {
     /* flush batched points every 60ms while drawing */
     useEffect(() => {
         if (!canDraw) return;
-        const ch = getGameChannel(clientId, roomCode);
+        const ch = getGameChannel(roomCode);
         flushTimer.current = setInterval(() => {
             if (batchRef.current.length < 1) return;
             const s: StrokeMsg = { pts: batchRef.current, color: erasing ? '#0b0b12' : color, size: erasing ? size * 2.2 : size };
@@ -158,7 +158,7 @@ export default function DrawCanvas({ roomCode, clientId, canDraw }: {
     };
     const onUp = () => { drawingRef.current = false; lastPtRef.current = null; };
 
-    const publishSimple = (name: string) => { void getGameChannel(clientId, roomCode).publish(name, {}); };
+    const publishSimple = (name: string) => { void getGameChannel(roomCode).publish(name, {}); };
     const doClear = () => { historyRef.current = []; clearCanvas(); publishSimple(GAME_EV.clear); };
     const doUndo = () => { historyRef.current.pop(); redrawAll(); publishSimple(GAME_EV.undo); };
 

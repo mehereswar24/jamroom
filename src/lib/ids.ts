@@ -3,10 +3,16 @@ import { customAlphabet } from 'nanoid';
 // No 0/O/1/I/L — codes get read aloud and typed on phones.
 const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
-export const newRoomCode = customAlphabet(ROOM_ALPHABET, 6);
+export const ROOM_CODE_LENGTH = 6;
 
+export const newRoomCode = customAlphabet(ROOM_ALPHABET, ROOM_CODE_LENGTH);
+
+/** Normalize user-typed input into a room code, or '' if it cannot be one.
+ *  Rejects rather than truncates: silently trimming a longer string would
+ *  route the caller into a different, valid room. */
 export function normalizeRoomCode(raw: string): string {
-    return raw.trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const cleaned = raw.trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+    return cleaned.length === ROOM_CODE_LENGTH ? cleaned : '';
 }
 
 const AVATAR_COLORS = [

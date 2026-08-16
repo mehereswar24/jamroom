@@ -3,6 +3,17 @@
 export const roomChannel = (code: string) => `room:${code}`;
 /** Dedicated channel for high-frequency game traffic (drawing strokes). */
 export const gameChannel = (code: string) => `room:${code}:game`;
+/** WebRTC signalling for the voice/video call. */
+export const callChannel = (code: string) => `room:${code}:call`;
+
+/** Every channel a member of `code` may touch — the Ably token capability is
+ *  built from exactly this list, so a new channel must be added here or it
+ *  will be denied at runtime. */
+export const roomCapability = (code: string): Record<string, ('subscribe' | 'publish' | 'presence')[]> => ({
+    [roomChannel(code)]: ['subscribe', 'publish', 'presence'],
+    [gameChannel(code)]: ['subscribe', 'publish'],
+    [callChannel(code)]: ['subscribe', 'publish', 'presence'],
+});
 
 /** Event names published on a room channel (server → clients, and client presence). */
 export const EV = {

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { normalizeRoomCode } from '@/lib/ids';
 import * as store from '@/server/store/roomStore';
 import { canControl, publishPlayback, publishQueue } from '@/server/actions';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 import type { PlaybackState } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -12,12 +13,14 @@ const effectivePos = (p: PlaybackState, now: number) =>
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
-        const clientId = String(body?.clientId ?? '').slice(0, 64);
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, meta, body } = auth;
+
+        const limited = await rateLimit(`playback:${code}:${clientId}`, 120, 60);
+        if (limited) return limited;
+
         const action = String(body?.action ?? '');
-        const meta = await store.getMeta(code);
-        if (!meta) return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
 
         // Track-end + metadata reports don't require control permission.
         const permissionless = action === 'ended' || action === 'duration' || action === 'error';

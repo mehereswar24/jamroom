@@ -13,7 +13,7 @@ const COOL_NICKNAMES = [
 
 export default function Landing() {
     const router = useRouter();
-    const { nickname, clientId, setNickname } = useLocalIdentity();
+    const { nickname, setNickname } = useLocalIdentity();
     const [joinCode, setJoinCode] = useState('');
     const [busy, setBusy] = useState<'create' | 'join' | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -57,7 +57,10 @@ export default function Landing() {
             const res = await fetch('/api/rooms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clientId, name: roomName })
+                // The server mints the host identity and returns it in a
+                // signed cookie, so nothing is sent from here.
+                credentials: 'same-origin',
+                body: JSON.stringify({ name: roomName })
             });
             const j = await res.json();
             if (!j.ok) throw new Error(j.error || 'Could not create room');
@@ -72,7 +75,7 @@ export default function Landing() {
     const joinRoom = async (codeToJoin?: string) => {
         if (needName()) return;
         const code = normalizeRoomCode(codeToJoin || joinCode);
-        if (code.length < 4) { setError('Enter a valid 4+ character room code'); return; }
+        if (!code) { setError('Enter a valid 6-character room code'); return; }
         setBusy('join'); setError(null);
         try {
             const res = await fetch(`/api/rooms/${code}`);
@@ -120,19 +123,14 @@ export default function Landing() {
                     <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight font-heading uppercase bg-gradient-to-b from-white via-slate-200 to-slate-400 bg-clip-text text-transparent filter drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]">
                         JamRoom
                     </h1>
-                    <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1 font-medium leading-normal">
-                        Synchronized audio rooms for you & your friends. Import Spotify playlists, search YouTube, and vibe in zero-latency sync.
+                    <p className="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto mt-1 font-medium leading-normal">
+                        Synchronized Watch Party Theater & Audio Rooms. Play <strong className="text-emerald-400">YouTube and direct video links</strong> together with friends in zero-latency sync.
                     </p>
 
-                    {/* Live Equalizer Spectrum Preview Visualizer */}
-                    <div className="flex items-end justify-center gap-1 h-4 mt-2">
-                        {[12, 20, 10, 24, 16, 26, 12, 20, 22, 14, 18, 8].map((h, i) => (
-                            <span
-                                key={i}
-                                className="w-1 rounded-full bg-white/70 animate-pulse"
-                                style={{ height: `${h}px`, animationDelay: `${i * 0.15}s` }}
-                            />
-                        ))}
+                    {/* Watch Party Feature Pill */}
+                    <div className="inline-flex items-center gap-2 px-3 py-1 mt-2.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>🍿 Watch Together Mode: YouTube & direct video</span>
                     </div>
                 </div>
 

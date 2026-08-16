@@ -9,6 +9,8 @@
  */
 
 import YouTube from 'youtube-sr';
+import { lookup } from 'dns/promises';
+import { isIP } from 'net';
 import type { VideoCandidate } from '../../lib/types';
 
 export type ResolvedUrl =
@@ -35,18 +37,109 @@ function titleFromUrl(u: URL): string {
     return cleaned || u.hostname;
 }
 
-/** Block link-resolver requests to the server's own network (SSRF guard). */
-function isPrivateHost(hostname: string): boolean {
-    const h = hostname.toLowerCase();
-    if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return true;
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
-        const [a, b] = h.split('.').map(Number);
-        return a === 10 || a === 127 || a === 0
+/**
+ * SSRF guard.
+ *
+ * The previous version pattern-matched the hostname string only, which three
+ * things walked straight through: a domain whose DNS record points at
+ * 127.0.0.1 or 169.254.169.254; a public URL that 302s to an internal address
+ * (redirects were followed without re-checking); and non-dotted-quad literals
+ * like http://2130706433/, which the dotted-quad regex never matched.
+ *
+ * So: resolve the name, check every returned address, and re-check on each
+ * redirect hop.
+ */
+
+/** True when an IP literal sits in a range we must never fetch from. */
+function isPrivateAddress(ip: string): boolean {
+    const v = isIP(ip);
+
+    if (v === 4) {
+        const [a, b] = ip.split('.').map(Number);
+        return a === 0 || a === 10 || a === 127
             || (a === 172 && b >= 16 && b <= 31)
             || (a === 192 && b === 168)
-            || (a === 169 && b === 254);
+            || (a === 169 && b === 254)   // cloud metadata
+            || (a === 100 && b >= 64 && b <= 127)  // CGNAT
+            || a >= 224;                   // multicast + reserved
     }
-    return h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80');
+
+    if (v === 6) {
+        const h = ip.toLowerCase().replace(/^\[|\]$/g, '');
+        if (h === '::1' || h === '::') return true;
+        // IPv4-mapped (::ffff:127.0.0.1) must be judged on the v4 address.
+        const mapped = h.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+        if (mapped) return isPrivateAddress(mapped[1]);
+        return h.startsWith('fc') || h.startsWith('fd')     // unique-local
+            || h.startsWith('fe8') || h.startsWith('fe9')   // link-local
+            || h.startsWith('fea') || h.startsWith('feb');
+    }
+
+    return false;
+}
+
+/** Resolve a hostname and reject if ANY returned address is private. */
+async function hostIsSafe(hostname: string): Promise<boolean> {
+    const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')
+        || h.endsWith('.localhost') || h.endsWith('.home.arpa')) return false;
+
+    // Literal address: judge it directly, no DNS involved.
+    if (isIP(h)) return !isPrivateAddress(h);
+
+    try {
+        const records = await lookup(h, { all: true });
+        if (!records.length) return false;
+        return !records.some(r => isPrivateAddress(r.address));
+    } catch {
+        return false; // unresolvable -> not fetchable anyway
+    }
+}
+
+const MAX_REDIRECTS = 4;
+const FETCH_TIMEOUT_MS = 6000;
+
+/**
+ * Fetch with manual redirect handling, re-validating the host at every hop.
+ * `redirect: 'follow'` would let a public URL bounce us into the private
+ * network after the initial check had already passed.
+ */
+async function safeFetch(
+    start: URL,
+    method: 'HEAD' | 'GET',
+    headers: Record<string, string> = {}
+): Promise<Response | null> {
+    let current = start;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+        for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+            const res = await fetch(current.href, {
+                method,
+                redirect: 'manual',
+                signal: ctrl.signal,
+                headers,
+            });
+
+            if (res.status < 300 || res.status >= 400) {
+                return res.ok || res.headers.get('content-type') ? res : null;
+            }
+
+            const location = res.headers.get('location');
+            if (!location) return null;
+
+            const next = new URL(location, current);
+            if (next.protocol !== 'http:' && next.protocol !== 'https:') return null;
+            if (!(await hostIsSafe(next.hostname))) return null;
+            current = next;
+        }
+        return null; // too many redirects
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 export async function resolveUrl(raw: string): Promise<ResolvedUrl> {
@@ -57,7 +150,7 @@ export async function resolveUrl(raw: string): Promise<ResolvedUrl> {
     } catch {
         return { kind: 'error', error: 'That does not look like a valid link' };
     }
-    if (isPrivateHost(u.hostname)) {
+    if (!(await hostIsSafe(u.hostname))) {
         return { kind: 'error', error: 'Links to private/local addresses are not allowed' };
     }
 
@@ -92,20 +185,12 @@ export async function resolveUrl(raw: string): Promise<ResolvedUrl> {
 
     /* Extensionless link: sniff the Content-Type without downloading the body */
     try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 6000);
-        let res = await fetch(u.href, { method: 'HEAD', redirect: 'follow', signal: ctrl.signal });
-        if (!res.ok || !res.headers.get('content-type')) {
+        const res = await safeFetch(u, 'HEAD')
             // Some hosts reject HEAD — retry as a range GET for the first byte
-            res = await fetch(u.href, {
-                method: 'GET', redirect: 'follow', signal: ctrl.signal,
-                headers: { Range: 'bytes=0-0' }
-            });
-        }
-        clearTimeout(timer);
-        const type = (res.headers.get('content-type') ?? '').toLowerCase();
-        if (res.ok && (type.startsWith('audio/') || type.startsWith('video/'))) {
-            return { kind: 'media', url: u.href, title: titleFromUrl(u) };
+            ?? await safeFetch(u, 'GET', { Range: 'bytes=0-0' });
+        const type = (res?.headers.get('content-type') ?? '').toLowerCase();
+        if (res?.ok && (type.startsWith('audio/') || type.startsWith('video/'))) {
+            return { kind: 'media', url: res.url || u.href, title: titleFromUrl(u) };
         }
     } catch { /* fall through to error */ }
 

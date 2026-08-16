@@ -24,6 +24,11 @@ export interface QueueItem {
     matchStatus: MatchStatus;
     matchScore: number | null;
     addedBy: string;
+    /** Verified identity of whoever added this, for permission checks.
+     *  `addedBy` is a display nickname the client chooses, so it must never
+     *  be used to decide who may remove an item. Optional for items written
+     *  before this field existed. */
+    addedByClientId?: string;
     playedAt: number | null;
 }
 

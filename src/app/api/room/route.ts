@@ -1,22 +1,29 @@
 import { NextResponse } from 'next/server';
-import { normalizeRoomCode } from '@/lib/ids';
 import { EV } from '@/lib/channels';
 import * as store from '@/server/store/roomStore';
 import { getPresence } from '@/server/realtime/presence';
 import { publish } from '@/server/realtime/publish';
 import { systemMessage } from '@/server/actions';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// How long the host must be absent from presence before another member can
+// claim the room, so a brief disconnect cannot be raced.
+const HOST_CLAIM_GRACE_MS = 15_000;
+
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
-        const clientId = String(body?.clientId ?? '').slice(0, 64);
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, meta, body } = auth;
+
+        const limited = await rateLimit(`room:${code}:${clientId}`, 30, 60);
+        if (limited) return limited;
+
         const action = String(body?.action ?? '');
-        const meta = await store.getMeta(code);
-        if (!meta) return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
 
         const publishHost = async (hostClientId: string, nick: string) => {
             await publish(code, EV.hostChanged, { hostClientId });
@@ -47,11 +54,25 @@ export async function POST(req: Request) {
                 // Server verifies the host is actually absent, then grants it.
                 const present = await getPresence(code);
                 if (present.some(m => m.clientId === meta.hostClientId)) {
+                    await store.clearHostAbsence(code);
                     return NextResponse.json({ ok: true, hostClientId: meta.hostClientId }); // host still here
                 }
                 const claimer = present.find(m => m.clientId === clientId);
                 if (!claimer) return NextResponse.json({ ok: false, error: 'Not present' }, { status: 400 });
+
+                // Require the host to have been gone for a grace period, so a
+                // transient disconnect does not hand the room to whoever polls first.
+                const absentSince = await store.markHostAbsent(code);
+                if (Date.now() - absentSince < HOST_CLAIM_GRACE_MS) {
+                    return NextResponse.json({
+                        ok: false,
+                        error: 'Waiting to see if the host reconnects',
+                        retryInMs: HOST_CLAIM_GRACE_MS - (Date.now() - absentSince),
+                    }, { status: 409 });
+                }
+
                 await store.setHost(code, clientId);
+                await store.clearHostAbsence(code);
                 await publishHost(clientId, claimer.nickname);
                 return NextResponse.json({ ok: true, hostClientId: clientId });
             }

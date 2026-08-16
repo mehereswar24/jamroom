@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Crown, Disc3, Gamepad2, ListMusic, MessageCircle, Settings, Users } from 'lucide-react';
-import { useLocalIdentity } from '@/hooks/useLocalIdentity';
+import { useLocalIdentity, useRoomIdentity } from '@/hooks/useLocalIdentity';
 import { useRoomConnection } from '@/hooks/useRoomConnection';
 import { useRoomStore } from '@/hooks/useRoomStore';
 import { api } from '@/hooks/api';
@@ -17,7 +17,9 @@ import CallBar from './CallBar';
 import GamesPanel from './GamesPanel';
 
 export default function RoomShell({ roomCode }: { roomCode: string }) {
-    const { nickname, clientId, setNickname } = useLocalIdentity();
+    const { nickname, setNickname } = useLocalIdentity();
+    // Identity is assigned by the server and arrives with the Ably token.
+    const clientId = useRoomIdentity(roomCode);
     const [draftName, setDraftName] = useState('');
     const [mounted, setMounted] = useState(false);
 

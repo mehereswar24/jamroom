@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { normalizeRoomCode } from '@/lib/ids';
 import { EV } from '@/lib/channels';
 import { publicState } from '@/server/store/gameStore';
 import * as game from '@/server/store/gameStore';
-import * as store from '@/server/store/roomStore';
 import { getPresence } from '@/server/realtime/presence';
 import { publish } from '@/server/realtime/publish';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 import type { GameFeedMsg } from '@/lib/game';
 
 export const runtime = 'nodejs';
@@ -15,12 +15,15 @@ const feedId = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
-        const clientId = String(body?.clientId ?? '').slice(0, 64);
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, body } = auth;
+
+        const limited = await rateLimit(`game:${code}:${clientId}`, 120, 60);
+        if (limited) return limited;
+
         const nickname = String(body?.nickname ?? 'Guest').slice(0, 24);
         const action = String(body?.action ?? '');
-        if (!(await store.roomExists(code))) return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
 
         const pushState = (g: game.GameStateInternal) => publish(code, EV.gameState, publicState(g));
         const pushFeed = (m: Omit<GameFeedMsg, 'id'>) => publish(code, EV.gameFeed, { id: feedId(), ...m });
