@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { normalizeRoomCode } from '@/lib/ids';
 import { EV } from '@/lib/channels';
 import * as board from '@/server/store/boardStore';
-import * as store from '@/server/store/roomStore';
 import { publish } from '@/server/realtime/publish';
+import { authenticate, isResponse } from '@/server/auth/requireIdentity';
+import { rateLimit } from '@/server/rateLimit';
 import type { BoardGameId, BoardState } from '@/lib/games/types';
 import { getGameDef } from '@/lib/games/registry';
 
@@ -12,14 +12,21 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const code = normalizeRoomCode(String(body?.code ?? ''));
-        const clientId = String(body?.clientId ?? '').slice(0, 64);
+        const auth = await authenticate(req);
+        if (isResponse(auth)) return auth;
+        const { code, clientId, body } = auth;
+
+        const limited = await rateLimit(`board:${code}:${clientId}`, 120, 60);
+        if (limited) return limited;
+
         const nickname = String(body?.nickname ?? 'Guest').slice(0, 24);
         const action = String(body?.action ?? '');
-        if (!(await store.roomExists(code))) return NextResponse.json({ ok: false, error: 'Room not found' }, { status: 404 });
 
-        const push = (b: BoardState | null) => (b ? publish(code, EV.boardState, b) : Promise.resolve());
+        const redacted = (b: BoardState): BoardState => {
+            const def = getGameDef(b.gameId);
+            return def?.redact ? def.redact(b) : b;
+        };
+        const push = (b: BoardState | null) => (b ? publish(code, EV.boardState, redacted(b)) : Promise.resolve());
 
         switch (action) {
             case 'create': {
@@ -52,11 +59,21 @@ export async function POST(req: Request) {
                 return NextResponse.json({ ok: true });
             }
             case 'exit': {
-                // host closes the game back to the hub
+                // Allows host or players to leave/clear the board game back to the hub
                 const b = await board.getBoard(code);
-                if (b && b.hostClientId === clientId) {
-                    await board.clearBoard(code);
-                    await publish(code, EV.boardState, null);
+                if (b) {
+                    if (b.hostClientId === clientId) {
+                        await board.clearBoard(code);
+                        await publish(code, EV.boardState, null);
+                    } else {
+                        b.players = b.players.filter(p => p.clientId !== clientId);
+                        if (b.players.length === 0) {
+                            await board.clearBoard(code);
+                            await publish(code, EV.boardState, null);
+                        } else {
+                            await publish(code, EV.boardState, redacted(b));
+                        }
+                    }
                 }
                 return NextResponse.json({ ok: true });
             }
