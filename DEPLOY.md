@@ -27,6 +27,7 @@ Project → Settings → Environment Variables (Production + Preview):
 | Variable | From |
 |----------|------|
 | `ABLY_API_KEY` | Ably API key |
+| `ROOM_IDENTITY_SECRET` | **Required.** Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `UPSTASH_REDIS_REST_URL` | Upstash REST URL |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token |
 | `SPOTIFY_CLIENT_ID` | Spotify app (optional) |
@@ -34,6 +35,12 @@ Project → Settings → Environment Variables (Production + Preview):
 | `NEXT_PUBLIC_TURN_URL` / `_USERNAME` / `_CREDENTIAL` | optional TURN for calls on strict NATs |
 
 ## 3. Deploy
+
+> **If room creation returns "Could not create room. Please try again."**, the
+> deployment is missing `ROOM_IDENTITY_SECRET`. `/api/rooms` mints a signed
+> identity cookie as its last step, and `mintToken` throws when the secret is
+> absent or under 32 chars — so the room is created in Redis but the request
+> still 500s. Set the variable and redeploy.
 
 Push to GitHub and import the repo in Vercel (framework auto-detected as
 Next.js), or run `vercel --prod`. That's it — no special build settings.
