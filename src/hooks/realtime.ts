@@ -13,6 +13,7 @@
  */
 
 import * as Ably from 'ably';
+import { nanoid } from 'nanoid';
 import { roomChannel, gameChannel, callChannel } from '@/lib/channels';
 
 let client: Ably.Realtime | null = null;
@@ -46,8 +47,11 @@ export function currentClientId(): string {
 export async function waitForIdentity(code: string): Promise<string> {
     const ably = getAbly(code);
     if (ably.auth.clientId) return ably.auth.clientId;
-    await ably.connection.once('connected');
-    return ably.auth.clientId ?? '';
+
+    return Promise.race([
+        ably.connection.once('connected').then(() => ably.auth.clientId ?? `client-${nanoid(8)}`),
+        new Promise<string>((resolve) => setTimeout(() => resolve(`client-${nanoid(8)}`), 2500))
+    ]);
 }
 
 export function getRoomChannel(code: string): Ably.RealtimeChannel {

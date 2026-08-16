@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     const code = normalizeRoomCode(new URL(req.url).searchParams.get('code') ?? '');
     if (!code) return NextResponse.json({ error: 'Room code required' }, { status: 400 });
     if (!(await store.roomExists(code))) {
-        return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+        await store.createRoom(code, 'JamRoom', 'system-init');
     }
 
     const { clientId, token, isNew } = await getOrCreateIdentity(code);
